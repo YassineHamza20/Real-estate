@@ -8,21 +8,22 @@ from properties.models import Property, Wishlist
 from datetime import datetime, timedelta
 import json
 from django.http import HttpResponse
+import io
+from io import BytesIO
+from django.db.models import Avg, Max, Min, Sum, Count
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from io import BytesIO
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
-from django.shortcuts import render
-from django.utils import timezone
-from django.db.models import Count, Q, Avg, Max, Min, Sum
-from django.http import JsonResponse, HttpResponse
-from users.models import User, SellerVerification
-from properties.models import Property, Wishlist
-from datetime import datetime, timedelta
-import json 
+
+
+
 
 def admin_dashboard(request):
     try:
@@ -234,7 +235,7 @@ def export_dashboard_pdf(request):
         elements.append(Paragraph("PRICE ANALYTICS", styles['Heading2']))
         
         price_data = [
-            ['PRICE METRIC', 'AMOUNT (DH)'],
+            ['PRICE METRIC', 'AMOUNT (euros)'],
             ['Average Property Price', f"{price_stats['avg_price'] or 0:,.2f}"],
             ['Most Expensive Property', f"{price_stats['max_price'] or 0:,.2f}"],
             ['Most Affordable Property', f"{price_stats['min_price'] or 0:,.2f}"],
@@ -292,7 +293,7 @@ def export_dashboard_pdf(request):
         ).order_by('-created_at')[:15]
         
         if recent_properties:
-            property_data = [['PROPERTY', 'CITY', 'PRICE (DH)', 'TYPE', 'ROOMS', 'WISHLISTS']]
+            property_data = [['PROPERTY', 'CITY', 'PRICE (euros)', 'TYPE', 'ROOMS', 'WISHLISTS']]
             
             for prop in recent_properties:
                 property_data.append([
@@ -362,3 +363,361 @@ def export_dashboard_pdf(request):
         
     except Exception as e:
         return HttpResponse(f"Error generating PDF: {str(e)}")
+    
+
+# dashboard/views.py - UPDATE IMPORTS AT THE TOP
+from django.db.models import Count, Q, Avg, Max, Min, Sum  # Make sure all are imported
+
+def export_dashboard_excel(request):
+    """Export complete dashboard data as Excel"""
+    try:
+        # Create a workbook and add worksheets
+        wb = Workbook()
+        
+        # Remove default sheet
+        wb.remove(wb.active)
+        
+        # Get comprehensive data
+        total_users = User.objects.count()
+        total_buyers = User.objects.filter(role='buyer').count()
+        total_sellers = User.objects.filter(role='seller').count()
+        total_admins = User.objects.filter(role='admin').count()
+        total_properties = Property.objects.count()
+        total_wishlists = Wishlist.objects.count()
+        
+        # Price statistics
+        price_stats = Property.objects.aggregate(
+            avg_price=Avg('price'),
+            max_price=Max('price'),
+            min_price=Min('price'),
+            total_value=Sum('price')
+        )
+        
+        # Seller verification stats
+        verified_sellers = SellerVerification.objects.filter(status='approved').count()
+        pending_verifications = SellerVerification.objects.filter(status='pending').count()
+        
+        # Property type distribution
+        property_types = Property.objects.values('property_type').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # Recent activity
+        new_users_week = User.objects.filter(
+            date_joined__gte=timezone.now() - timedelta(days=7)
+        ).count()
+        
+        new_properties_week = Property.objects.filter(
+            created_at__gte=timezone.now() - timedelta(days=7)
+        ).count()
+        
+        # Recent properties
+        recent_properties = Property.objects.select_related('seller').annotate(
+            wishlist_count=Count('wishlisted_by')
+        ).order_by('-created_at')[:50]
+        
+        # Most wishlisted properties
+        most_wishlisted = Property.objects.annotate(
+            wishlist_count=Count('wishlisted_by')
+        ).filter(wishlist_count__gt=0).order_by('-wishlist_count')[:20]
+        
+        # User list
+        recent_users = User.objects.select_related('seller_verification').order_by('-date_joined')[:50]
+        
+        # STYLES
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        header_fill = PatternFill(start_color="2c5a77", end_color="2c5a77", fill_type="solid")
+        subheader_font = Font(bold=True, color="2c5a77", size=11)
+        subheader_fill = PatternFill(start_color="e3f2fd", end_color="e3f2fd", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        center_align = Alignment(horizontal='center', vertical='center')
+        
+        # WORKSHEET 1: EXECUTIVE SUMMARY
+        ws1 = wb.create_sheet("Executive Summary")
+        
+        # Title
+        ws1.merge_cells('A1:D1')
+        ws1['A1'] = "REAL ESTATE ANALYTICS DASHBOARD - EXECUTIVE SUMMARY"
+        ws1['A1'].font = Font(bold=True, size=14, color="2c5a77")
+        ws1['A1'].alignment = center_align
+        
+        ws1.merge_cells('A2:D2')
+        ws1['A2'] = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        ws1['A2'].font = Font(size=10, italic=True)
+        ws1['A2'].alignment = center_align
+        
+        # Platform Overview
+        ws1['A4'] = "PLATFORM OVERVIEW"
+        ws1['A4'].font = subheader_font
+        ws1['A4'].fill = subheader_fill
+        
+        overview_data = [
+            ['Metric', 'Count', 'Additional Info', 'Value'],
+            ['Total Users', total_users, 'New Users (7 days)', new_users_week],
+            ['Buyers', total_buyers, 'Buyer Percentage', f"{(total_buyers/total_users*100) if total_users > 0 else 0:.1f}%"],
+            ['Sellers', total_sellers, 'Verified Sellers', verified_sellers],
+            ['Admins', total_admins, 'Pending Verifications', pending_verifications],
+            ['Total Properties', total_properties, 'New Properties (7 days)', new_properties_week],
+            ['Wishlist Saves', total_wishlists, 'Engagement Rate', f"{(total_wishlists/total_users*100) if total_users > 0 else 0:.1f}%"],
+        ]
+        
+        for row_idx, row_data in enumerate(overview_data, start=5):
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = ws1.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border
+                if row_idx == 5:  # Header row
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = center_align
+                else:
+                    cell.alignment = center_align
+        
+        # Price Analytics
+        ws1['A12'] = "PRICE ANALYTICS"
+        ws1['A12'].font = subheader_font
+        ws1['A12'].fill = subheader_fill
+        
+        price_data = [
+            ['Metric', 'Value (euros)'],
+            ['Average Property Price', price_stats['avg_price'] or 0],
+            ['Most Expensive Property', price_stats['max_price'] or 0],
+            ['Most Affordable Property', price_stats['min_price'] or 0],
+            ['Total Platform Value', price_stats['total_value'] or 0],
+        ]
+        
+        for row_idx, row_data in enumerate(price_data, start=13):
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = ws1.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border
+                if row_idx == 13:
+                    cell.font = header_font
+                    cell.fill = PatternFill(start_color="10b981", end_color="10b981", fill_type="solid")
+                    cell.alignment = center_align
+                else:
+                    cell.alignment = center_align
+        
+        # Format price cells as currency
+        for row in range(14, 18):
+            cell = ws1.cell(row=row, column=2)
+            cell.number_format = '#,##0.00'
+        
+        # Auto-adjust column widths
+        for column in ws1.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws1.column_dimensions[column_letter].width = adjusted_width
+        
+        # WORKSHEET 2: PROPERTY ANALYTICS
+        ws2 = wb.create_sheet("Property Analytics")
+        
+        # Title
+        ws2.merge_cells('A1:G1')
+        ws2['A1'] = "PROPERTY ANALYTICS"
+        ws2['A1'].font = Font(bold=True, size=14, color="2c5a77")
+        ws2['A1'].alignment = center_align
+        
+        # Property Type Distribution
+        ws2['A3'] = "PROPERTY TYPE DISTRIBUTION"
+        ws2['A3'].font = subheader_font
+        ws2['A3'].fill = subheader_fill
+        
+        type_data = [['Property Type', 'Count', 'Percentage']]
+        total_props = sum(item['count'] for item in property_types)
+        
+        for item in property_types:
+            percentage = (item['count'] / total_props * 100) if total_props > 0 else 0
+            type_data.append([
+                item['property_type'].title(),
+                item['count'],
+                f"{percentage:.1f}%"
+            ])
+        
+        for row_idx, row_data in enumerate(type_data, start=4):
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = ws2.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border
+                if row_idx == 4:
+                    cell.font = header_font
+                    cell.fill = PatternFill(start_color="8b5cf6", end_color="8b5cf6", fill_type="solid")
+                    cell.alignment = center_align
+                else:
+                    cell.alignment = center_align
+        
+        # Recent Properties
+        ws2['A10'] = "RECENT PROPERTIES (Last 50)"
+        ws2['A10'].font = subheader_font
+        ws2['A10'].fill = subheader_fill
+        
+        property_headers = ['Property Name', 'City', 'Price (euros)', 'Type', 'Rooms', 'Size', 'Wishlists', 'Seller', 'Created Date', 'Status']
+        
+        for col_idx, header in enumerate(property_headers, start=1):
+            cell = ws2.cell(row=11, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = PatternFill(start_color="f59e0b", end_color="f59e0b", fill_type="solid")
+            cell.border = border
+            cell.alignment = center_align
+        
+        for row_idx, prop in enumerate(recent_properties, start=12):
+            ws2.cell(row=row_idx, column=1, value=prop.name).border = border
+            ws2.cell(row=row_idx, column=2, value=prop.city).border = border
+            ws2.cell(row=row_idx, column=3, value=float(prop.price)).border = border
+            ws2.cell(row=row_idx, column=4, value=prop.property_type.title()).border = border
+            ws2.cell(row=row_idx, column=5, value=prop.number_of_rooms).border = border
+            ws2.cell(row=row_idx, column=6, value=float(prop.size) if prop.size else 0).border = border
+            ws2.cell(row=row_idx, column=7, value=prop.wishlist_count).border = border
+            ws2.cell(row=row_idx, column=8, value=prop.seller.username).border = border
+            ws2.cell(row=row_idx, column=9, value=prop.created_at.strftime('%Y-%m-%d')).border = border
+            ws2.cell(row=row_idx, column=10, value='Active' if prop.is_available else 'Inactive').border = border
+        
+        # Format price column as currency
+        for row in range(12, 12 + len(recent_properties)):
+            cell = ws2.cell(row=row, column=3)
+            cell.number_format = '#,##0.00'
+        
+        # Most Wishlisted Properties
+        start_row = len(recent_properties) + 15
+        ws2.cell(row=start_row, column=1, value="MOST WISHLISTED PROPERTIES").font = subheader_font
+        ws2.cell(row=start_row, column=1).fill = subheader_fill
+        
+        wishlist_headers = ['Property Name', 'City', 'Price (euros)', 'Wishlist Count', 'Popularity Score']
+        
+        for col_idx, header in enumerate(wishlist_headers, start=1):
+            cell = ws2.cell(row=start_row+1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = PatternFill(start_color="ec4899", end_color="ec4899", fill_type="solid")
+            cell.border = border
+            cell.alignment = center_align
+        
+        for row_idx, prop in enumerate(most_wishlisted, start=start_row+2):
+            popularity = (prop.wishlist_count / total_users * 100) if total_users > 0 else 0
+            ws2.cell(row=row_idx, column=1, value=prop.name).border = border
+            ws2.cell(row=row_idx, column=2, value=prop.city).border = border
+            ws2.cell(row=row_idx, column=3, value=float(prop.price)).border = border
+            ws2.cell(row=row_idx, column=4, value=prop.wishlist_count).border = border
+            ws2.cell(row=row_idx, column=5, value=f"{popularity:.2f}%").border = border
+        
+        # Format price column as currency
+        for row in range(start_row+2, start_row+2 + len(most_wishlisted)):
+            cell = ws2.cell(row=row, column=3)
+            cell.number_format = '#,##0.00'
+        
+        # Auto-adjust column widths for ws2
+        for column in ws2.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min((max_length + 2), 30)
+            ws2.column_dimensions[column_letter].width = adjusted_width
+        
+        # WORKSHEET 3: USER ANALYTICS
+        ws3 = wb.create_sheet("User Analytics")
+        
+        # Title
+        ws3.merge_cells('A1:E1')
+        ws3['A1'] = "USER ANALYTICS"
+        ws3['A1'].font = Font(bold=True, size=14, color="2c5a77")
+        ws3['A1'].alignment = center_align
+        
+        # User Distribution
+        ws3['A3'] = "USER DISTRIBUTION"
+        ws3['A3'].font = subheader_font
+        ws3['A3'].fill = subheader_fill
+        
+        user_dist_data = [
+            ['Role', 'Count', 'Percentage'],
+            ['Buyers', total_buyers, f"{(total_buyers/total_users*100) if total_users > 0 else 0:.1f}%"],
+            ['Sellers', total_sellers, f"{(total_sellers/total_users*100) if total_users > 0 else 0:.1f}%"],
+            ['Admins', total_admins, f"{(total_admins/total_users*100) if total_users > 0 else 0:.1f}%"],
+        ]
+        
+        for row_idx, row_data in enumerate(user_dist_data, start=4):
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = ws3.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border
+                if row_idx == 4:
+                    cell.font = header_font
+                    cell.fill = PatternFill(start_color="06b6d4", end_color="06b6d4", fill_type="solid")
+                    cell.alignment = center_align
+                else:
+                    cell.alignment = center_align
+        
+        # Recent Users
+        ws3['A8'] = "RECENT USERS (Last 50)"
+        ws3['A8'].font = subheader_font
+        ws3['A8'].fill = subheader_fill
+        
+        user_headers = ['Username', 'Email', 'Role', 'Phone', 'Join Date', 'Verification Status']
+        
+        for col_idx, header in enumerate(user_headers, start=1):
+            cell = ws3.cell(row=9, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = PatternFill(start_color="84cc16", end_color="84cc16", fill_type="solid")
+            cell.border = border
+            cell.alignment = center_align
+        
+        for row_idx, user in enumerate(recent_users, start=10):
+            verification_status = 'Not Seller'
+            if user.role == 'seller':
+                if hasattr(user, 'seller_verification'):
+                    verification_status = user.seller_verification.status.title()
+                else:
+                    verification_status = 'Not Submitted'
+            
+            ws3.cell(row=row_idx, column=1, value=user.username).border = border
+            ws3.cell(row=row_idx, column=2, value=user.email).border = border
+            ws3.cell(row=row_idx, column=3, value=user.role.title()).border = border
+            ws3.cell(row=row_idx, column=4, value=user.phone_number or 'N/A').border = border
+            ws3.cell(row=row_idx, column=5, value=user.date_joined.strftime('%Y-%m-%d')).border = border
+            ws3.cell(row=row_idx, column=6, value=verification_status).border = border
+        
+        # Auto-adjust column widths for ws3
+        for column in ws3.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min((max_length + 2), 25)
+            ws3.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to buffer
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        # Prepare response
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"RealEstate_Analytics_Export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Excel Export Error: {e}")
+        print(f"Error details: {error_details}")
+        return HttpResponse(f"Error generating Excel: {str(e)}")

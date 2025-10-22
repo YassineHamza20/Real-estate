@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+
+{% block userlinks %}
+    <a href="/dashboard/" style="
+        background: #417690; 
+        color: white; 
+        padding: 8px 15px; 
+        text-decoration: none; 
+        border-radius: 4px; 
+        margin-right: 20px; 
+        font-weight: 500;
+        border: 1px solid #417690;
+        transition: all 0.3s ease;
+    " onmouseover="this.style.background='#2c5a77'; this.style.borderColor='#2c5a77'" 
+       onmouseout="this.style.background='#417690'; this.style.borderColor='#417690'">
+        📊 Analytics Dashboard
+    </a>
+    
+    {% if user.has_usable_password %}
+    <a href="{% url 'admin:password_change' %}">Change password</a> /
+    {% endif %}
+    <a href="{% url 'admin:logout' %}">Log out</a>
+{% endblock %}

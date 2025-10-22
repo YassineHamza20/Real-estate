@@ -27,10 +27,30 @@ def register_user(request):
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def login_user(request):
-    username = request.data.get('username')
+    username_or_email = request.data.get('username')
     password = request.data.get('password')
     
-    user = authenticate(username=username, password=password)
+    # Input validation
+    if not username_or_email or not password:
+        return Response(
+            {'error': 'Please provide both username/email and password'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    user = None
+    
+    # Try email first
+    if '@' in username_or_email:
+        try:
+            user_obj = User.objects.get(email=username_or_email)
+            user = authenticate(username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            user = None
+    
+    # Fallback to username
+    if user is None:
+        user = authenticate(username=username_or_email, password=password)
+    
     if user:
         refresh = RefreshToken.for_user(user)
         return Response({
@@ -38,10 +58,13 @@ def login_user(request):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         })
+    
+    # ✅ FIXED: This line was not indented properly!
     return Response(
-        {'error': 'Invalid credentials'}, 
+        {'error': 'Invalid username/email or password'}, 
         status=status.HTTP_401_UNAUTHORIZED
-    )
+    ) 
+
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer

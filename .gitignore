@@ -25,4 +25,4 @@ media/
 .vscode/
 .idea/
 *.swp
-*.swo
+*.swovenv/

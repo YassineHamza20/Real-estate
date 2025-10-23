@@ -20,11 +20,12 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-
-
-
-
-
+from django.contrib.admin.views.decorators import staff_member_required
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView
+from users.models import User, SellerVerification
+ 
+@staff_member_required
 def admin_dashboard(request):
     try:
         # Basic counts
@@ -143,6 +144,9 @@ def dashboard_api(request):
         return JsonResponse({'error': 'API temporarily unavailable'}, status=500)
     
 
+
+
+#PDF fct ------------
 def export_dashboard_pdf(request):
     """Export complete dashboard data as PDF"""
     try:
@@ -368,6 +372,9 @@ def export_dashboard_pdf(request):
 # dashboard/views.py - UPDATE IMPORTS AT THE TOP
 from django.db.models import Count, Q, Avg, Max, Min, Sum  # Make sure all are imported
 
+
+
+#excel fct ------------
 def export_dashboard_excel(request):
     """Export complete dashboard data as Excel"""
     try:

@@ -28,7 +28,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email', 'role', 'phone_number', 
                  'first_name', 'last_name', 'date_joined', 'verification_status')
-
+        read_only_fields = ('role', 'username', 'email')  # ← ADD THIS LINE
+    
     def get_verification_status(self, obj):
         if obj.role == User.Role.SELLER:
             try:

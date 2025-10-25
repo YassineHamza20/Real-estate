@@ -17,6 +17,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-for-dev')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key-here')
 
 
 # Application definition
@@ -37,10 +38,17 @@ INSTALLED_APPS = [
     # Custom apps
     'users',
     'properties',
+    'chatbot',
+
 ]
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',

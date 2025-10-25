@@ -9,20 +9,32 @@ from .serializers import (
     UserProfileSerializer, 
     SellerVerificationSerializer
 )
+from rest_framework.permissions import AllowAny
+from .serializers import PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+
+
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def register_user(request):
-    serializer = UserRegistrationSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.save()
-        refresh = RefreshToken.for_user(user)
+    try:
+        serializer = UserRegistrationSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'user': UserProfileSerializer(user).data,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }, status=status.HTTP_201_CREATED)
+        
+        # Return detailed validation errors
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
         return Response({
-            'user': UserProfileSerializer(user).data,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            "error": "An unexpected error occurred during registration."
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -124,4 +136,36 @@ def submit_verification(request):
     if serializer.is_valid():
         serializer.save(user=request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_request(request):
+    serializer = PasswordResetRequestSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            "message": "Password reset link has been sent to your email."
+        }, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request, uid, token):
+    data = {
+        'uid': uid,
+        'token': token,
+        'new_password': request.data.get('new_password'),
+        'confirm_password': request.data.get('confirm_password')
+    }
+    
+    serializer = PasswordResetConfirmSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            "message": "Password has been reset successfully."
+        }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -26,12 +26,11 @@ urlpatterns = [
     path('dashboard/', include('dashboard.urls')),
     path('api/users/', include('users.urls')),
     path('api/properties/', include('properties.urls')),  
+    path('api/chatbot/', include('chatbot.urls')),
     
 ]
-
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
 
 # Custom admin titles
 admin.site.site_header = "Real Estate Admin Dashboard"

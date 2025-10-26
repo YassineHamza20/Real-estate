@@ -10,7 +10,7 @@ class User(AbstractUser):
     
     role = models.CharField(
         max_length=10,
-        choices=Role.choices,
+        choices=Role.choices,  
         default=Role.BUYER
     )
     phone_number = models.CharField(max_length=15, blank=True)

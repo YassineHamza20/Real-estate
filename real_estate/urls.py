@@ -36,3 +36,4 @@ if settings.DEBUG:
 admin.site.site_header = "Real Estate Admin Dashboard"
 admin.site.site_title = "Real Estate Admin"
 admin.site.index_title = "Welcome to Real Estate Analytics"
+

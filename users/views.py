@@ -15,8 +15,9 @@ from .serializers import (
 )
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.tokens import default_token_generator  
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode  # ADD THIS
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str   
+
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def register_user(request):
@@ -182,45 +183,73 @@ class SellerVerificationView(generics.CreateAPIView):
             raise permissions.PermissionDenied("Only sellers can submit verification.")
         serializer.save(user=self.request.user)
 
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def check_verification_status(request):
-    if request.user.role != User.Role.SELLER:
-        return Response({"error": "User is not a seller"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        verification = request.user.seller_verification
-        return Response({
-            "status": verification.status,
-            "submitted_at": verification.submitted_at,
-            "reviewed_at": verification.reviewed_at,
-            "admin_notes": verification.admin_notes
-        })
-    except User.seller_verification.RelatedObjectDoesNotExist:
-        return Response({
-            "status": "not_submitted",
-            "message": "Please submit verification documents"
-        })
-
-
+# users/views.py - Temporary debug version
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def submit_verification(request):
-    if request.user.role != User.Role.SELLER:
-        return Response({"error": "User is not a seller"}, status=status.HTTP_400_BAD_REQUEST)
+    print(f"Request method: {request.method}")
+    print(f"Request content type: {request.content_type}")
+    print(f"Request FILES: {request.FILES}")
+    print(f"Request DATA: {request.data}")
+    print(f"User role: {request.user.role}")
+    
+    if request.user.role != User.Role.BUYER:
+        return Response({"error": "Only buyers can submit seller verification"}, status=status.HTTP_400_BAD_REQUEST)
     
     if hasattr(request.user, 'seller_verification'):
         return Response({"error": "Verification already submitted"}, status=status.HTTP_400_BAD_REQUEST)
     
-    serializer = SellerVerificationSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save(user=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        serializer = SellerVerificationSerializer(data=request.data)
+        print(f"Serializer data: {request.data}")
+        print(f"Serializer is valid: {serializer.is_valid()}")
+        
+        if not serializer.is_valid():
+            print(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        verification = serializer.save(user=request.user)
+        print(f"Verification created: {verification.id}")
+        
+        return Response({
+            "message": "Verification submitted successfully",
+            "status": verification.status,
+            "submitted_at": verification.submitted_at
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        import traceback
+        print(f"Error: {str(e)}")
+        print(f"Traceback: {traceback.format_exc()}")
+        return Response({
+            "error": f"Server error: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# users/views.py
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def check_verification_status(request):
+    try:
+        verification = request.user.seller_verification
+        document_url = None
+        if verification.document:
+            # Generate full URL to the document
+            document_url = request.build_absolute_uri(verification.document.url)
+        
+        return Response({
+            "status": verification.status,
+            "submitted_at": verification.submitted_at,
+            "reviewed_at": verification.reviewed_at,
+            "admin_notes": verification.admin_notes if verification.admin_notes else "",
+            "document_name": verification.document.name if verification.document else None,
+            "document_url": document_url,  # Add the full URL
+        })
+    except User.seller_verification.RelatedObjectDoesNotExist:
+        return Response({
+            "status": "none",
+            "message": "No verification submitted"
+        })
 
-
-# users/views.py - Update your password reset views if needed
+# Password reset views
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def password_reset_request(request):
@@ -229,24 +258,6 @@ def password_reset_request(request):
         serializer.save()
         return Response({
             "message": "Password reset link has been sent to your email."
-        }, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def password_reset_confirm(request, uid, token):
-    data = {
-        'uid': uid,
-        'token': token,
-        'new_password': request.data.get('new_password'),
-        'confirm_password': request.data.get('confirm_password')
-    }
-    
-    serializer = PasswordResetConfirmSerializer(data=data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            "message": "Password has been reset successfully."
         }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

@@ -168,7 +168,10 @@ class SellerVerificationSerializer(serializers.ModelSerializer):
         model = SellerVerification
         fields = ['id', 'document', 'status', 'submitted_at', 'reviewed_at', 'admin_notes']
         read_only_fields = ['id', 'status', 'submitted_at', 'reviewed_at', 'admin_notes']
-
+    
+    def create(self, validated_data):
+        # Ensure the document is properly handled
+        return SellerVerification.objects.create(**validated_data)
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()

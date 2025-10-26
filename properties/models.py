@@ -33,7 +33,7 @@ class Property(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.name} - {self.price} DH"
+        return f"{self.name} - {self.price} euros"
 
 class PropertyImage(models.Model):
     property = models.ForeignKey(

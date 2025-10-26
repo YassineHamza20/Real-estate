@@ -1,3 +1,4 @@
+# users/views.py
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
@@ -7,13 +8,15 @@ from .models import User, SellerVerification
 from .serializers import (
     UserRegistrationSerializer, 
     UserProfileSerializer, 
-    SellerVerificationSerializer
+    SellerVerificationSerializer,
+    EmailConfirmationSerializer,
+    PasswordResetRequestSerializer, 
+    PasswordResetConfirmSerializer
 )
 from rest_framework.permissions import AllowAny
-from .serializers import PasswordResetRequestSerializer, PasswordResetConfirmSerializer
-
-
-
+from django.contrib.auth.tokens import default_token_generator  
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode  # ADD THIS
+from django.utils.encoding import force_bytes, force_str   
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def register_user(request):
@@ -21,14 +24,14 @@ def register_user(request):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            refresh = RefreshToken.for_user(user)
+            
+            # Return success response but user is not active yet
             return Response({
-                'user': UserProfileSerializer(user).data,
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
+                'message': 'Registration successful! Please check your email to confirm your account before logging in.',
+                'user_id': user.id,
+                'email': user.email
             }, status=status.HTTP_201_CREATED)
         
-        # Return detailed validation errors
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     except Exception as e:
@@ -36,46 +39,130 @@ def register_user(request):
             "error": "An unexpected error occurred during registration."
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def confirm_email(request):
+    """Confirm user's email address"""
+    serializer = EmailConfirmationSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        
+        # Generate tokens for automatic login after confirmation
+        user = serializer.user
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'message': 'Email confirmed successfully! Your account is now active.',
+            'user': UserProfileSerializer(user).data,
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def login_user(request):
     username_or_email = request.data.get('username')
     password = request.data.get('password')
     
-    # Input validation
     if not username_or_email or not password:
         return Response(
-            {'error': 'Please provide both username/email and password'}, 
+            {'error': 'Missing credentials'}, 
             status=status.HTTP_400_BAD_REQUEST
         )
     
     user = None
     
-    # Try email first
-    if '@' in username_or_email:
-        try:
+    # Don't reveal whether username/email exists for security
+    try:
+        if '@' in username_or_email:
             user_obj = User.objects.get(email=username_or_email)
-            user = authenticate(username=user_obj.username, password=password)
-        except User.DoesNotExist:
-            user = None
+        else:
+            user_obj = User.objects.get(username=username_or_email)
+        
+        user = authenticate(username=user_obj.username, password=password)
+        
+        if user:
+            if not user.email_verified:
+                return Response(
+                    {
+                        'error': 'verification of your email is required',
+                        'message': 'Please verify your email address to continue.',
+                        'email': user.email,
+                        'resend_url': '/api/users/resend-confirmation/'
+                    }, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            if not user.is_active:
+                return Response(
+                    {
+                        'error': 'account_inactive',
+                        'message': 'This account has been deactivated.'
+                    }, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            
+            # Successful login
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'user': UserProfileSerializer(user).data,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            })
+            
+    except User.DoesNotExist:
+        pass  # Continue to generic error
     
-    # Fallback to username
-    if user is None:
-        user = authenticate(username=username_or_email, password=password)
-    
-    if user:
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'user': UserProfileSerializer(user).data,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        })
-    
-    # ✅ FIXED: This line was not indented properly!
+    # Generic error for security (don't reveal if user exists)
     return Response(
-        {'error': 'Invalid username/email or password'}, 
+        {
+            'error': 'Invalid login credentials. Please check your username/email and password',
+            'message': 'Invalid login credentials. Please check your username/email and password.'
+        }, 
         status=status.HTTP_401_UNAUTHORIZED
-    ) 
+    )
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def resend_confirmation_email(request):
+    """Resend email confirmation link"""
+    email = request.data.get('email')
+    
+    if not email:
+        return Response(
+            {'error': 'Email is required'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        user = User.objects.get(email=email)
+        
+        if user.email_verified:
+            return Response(
+                {'error': 'Email is already verified'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Generate new token and send email
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # Send confirmation email (reusing the method from serializer)
+        serializer = UserRegistrationSerializer()
+        serializer.send_confirmation_email(user, uid, token)
+        
+        return Response({
+            'message': 'Confirmation email has been resent. Please check your inbox.'
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response(
+            {'error': 'No user found with this email address'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -85,12 +172,12 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+
 class SellerVerificationView(generics.CreateAPIView):
     serializer_class = SellerVerificationSerializer
     permission_classes = [permissions.IsAuthenticated]
     
     def perform_create(self, serializer):
-        # Ensure only sellers can submit verification
         if self.request.user.role != User.Role.SELLER:
             raise permissions.PermissionDenied("Only sellers can submit verification.")
         serializer.save(user=self.request.user)
@@ -99,9 +186,6 @@ class SellerVerificationView(generics.CreateAPIView):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def check_verification_status(request):
-    """
-    Check seller verification status
-    """
     if request.user.role != User.Role.SELLER:
         return Response({"error": "User is not a seller"}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -119,16 +203,13 @@ def check_verification_status(request):
             "message": "Please submit verification documents"
         })
 
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def submit_verification(request):
-    """
-    Submit seller verification documents
-    """
     if request.user.role != User.Role.SELLER:
         return Response({"error": "User is not a seller"}, status=status.HTTP_400_BAD_REQUEST)
     
-    # Check if already submitted
     if hasattr(request.user, 'seller_verification'):
         return Response({"error": "Verification already submitted"}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -139,8 +220,7 @@ def submit_verification(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
+# users/views.py - Update your password reset views if needed
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def password_reset_request(request):
@@ -151,6 +231,25 @@ def password_reset_request(request):
             "message": "Password reset link has been sent to your email."
         }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request, uid, token):
+    data = {
+        'uid': uid,
+        'token': token,
+        'new_password': request.data.get('new_password'),
+        'confirm_password': request.data.get('confirm_password')
+    }
+    
+    serializer = PasswordResetConfirmSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            "message": "Password has been reset successfully."
+        }, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

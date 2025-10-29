@@ -20,6 +20,8 @@ class PropertyCreateSerializer(serializers.ModelSerializer):
 class PropertySerializer(serializers.ModelSerializer):
     images = PropertyImageSerializer(many=True, read_only=True)
     seller_name = serializers.CharField(source='seller.username', read_only=True)
+    seller_email = serializers.CharField(source='seller.email', read_only=True)  # Add this
+    seller_phone = serializers.CharField(source='seller.phone_number', read_only=True)  # Add this
     in_wishlist = serializers.SerializerMethodField()
     
     class Meta:
@@ -27,7 +29,7 @@ class PropertySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'address', 'city', 
             'price', 'number_of_rooms', 'size', 'property_type',
-            'is_available', 'seller', 'seller_name', 'images',
+            'is_available', 'seller', 'seller_name', 'seller_email', 'seller_phone', 'images',  # Add new fields
             'in_wishlist', 'created_at', 'updated_at'
         ]
         read_only_fields = ['seller', 'created_at', 'updated_at']

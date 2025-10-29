@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { propertiesApi } from "@/lib/api/properties"
+import { usersApi } from "@/lib/api/users"
 import type { Property } from "@/types/property"
-import { MapPin, Bed, Bath, Square, Calendar, Heart, Share2, ArrowLeft, Check, Phone, Mail, User } from "lucide-react"
+import { MapPin, Bed, Square, Calendar, Heart, Share2, ArrowLeft, Check, Phone, Mail, User } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Footer } from "@/components/footer"
 
@@ -20,10 +21,24 @@ export default function PropertyDetailPage() {
   const [property, setProperty] = useState<Property | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+const [sellerContact, setSellerContact] = useState<{
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+} | null>(null)
+  const [isLoadingContact, setIsLoadingContact] = useState(false)
 
   useEffect(() => {
     loadProperty()
   }, [params.id])
+
+  // Load seller contact info when property loads and user is authenticated
+  useEffect(() => {
+    if (user && property) {
+      loadSellerContact()
+    }
+  }, [user, property])
 
   const loadProperty = async () => {
     setIsLoading(true)
@@ -35,6 +50,38 @@ export default function PropertyDetailPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const loadSellerContact = async () => {
+    if (!property) return
+    
+    setIsLoadingContact(true)
+    try {
+      const contactInfo = await usersApi.getSellerContact(property.seller.id)
+      setSellerContact({
+         first_name: contactInfo.first_name,
+      last_name: contactInfo.last_name,
+        email: contactInfo.email,
+        phone: contactInfo.phone
+      })
+    } catch (error) {
+      console.error("Failed to load seller contact:", error)
+      // Keep sellerContact as null to show generic buttons
+    } finally {
+      setIsLoadingContact(false)
+    }
+  }
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('de-DE', {
+      style: 'currency',
+      currency: 'EUR',
+      maximumFractionDigits: 0,
+    }).format(price)
+  }
+
+  const formatSquareMeters = (sqm: number) => {
+    return new Intl.NumberFormat('de-DE').format(sqm)
   }
 
   if (isLoading) {
@@ -85,8 +132,8 @@ export default function PropertyDetailPage() {
             <div className="relative bg-background rounded-2xl border-2 border-border overflow-hidden shadow-sm">
               <div className="relative h-[500px]">
                 <Image
-                  src={property.images[currentImageIndex]?.url || "/placeholder.svg?height=500&width=900"}
-                  alt={property.title}
+                  src={property.images[currentImageIndex]?.url || "/placeholder.svg"}
+                  alt={`${property.name} - Image ${currentImageIndex + 1}`}
                   fill
                   className="object-cover"
                 />
@@ -118,11 +165,11 @@ export default function PropertyDetailPage() {
             <div className="bg-background rounded-2xl border-2 border-border p-8 shadow-sm">
               <div className="flex items-start justify-between mb-6">
                 <div className="flex-1">
-                  <h1 className="text-4xl font-bold mb-3 text-balance">{property.title}</h1>
+                  <h1 className="text-4xl font-bold mb-3 text-balance">{property.name}</h1>
                   <div className="flex items-center gap-2 text-muted-foreground text-lg">
                     <MapPin className="h-5 w-5 text-primary" />
                     <span>
-                      {property.address}, {property.city}, {property.state} {property.zipCode}
+                      {property.address}, {property.city}
                     </span>
                   </div>
                 </div>
@@ -137,7 +184,7 @@ export default function PropertyDetailPage() {
               </div>
 
               <div className="flex items-center gap-3 mb-8">
-                <Badge variant="secondary" className="text-base px-4 py-1.5">
+                <Badge variant="secondary" className="text-base px-4 py-1.5 capitalize">
                   {property.type}
                 </Badge>
                 <Badge
@@ -148,7 +195,7 @@ export default function PropertyDetailPage() {
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8 p-6 bg-muted/50 rounded-xl">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 p-6 bg-muted/50 rounded-xl">
                 <div className="flex flex-col items-center text-center">
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                     <Bed className="h-6 w-6 text-primary" />
@@ -158,24 +205,17 @@ export default function PropertyDetailPage() {
                 </div>
                 <div className="flex flex-col items-center text-center">
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                    <Bath className="h-6 w-6 text-primary" />
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-1">Bathrooms</p>
-                  <p className="text-xl font-bold">{property.bathrooms}</p>
-                </div>
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                     <Square className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-sm text-muted-foreground mb-1">Square Feet</p>
-                  <p className="text-xl font-bold">{property.squareFeet.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Size</p>
+                  <p className="text-xl font-bold">{formatSquareMeters(property.squareMeters)} m²</p>
                 </div>
                 <div className="flex flex-col items-center text-center">
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                     <Calendar className="h-6 w-6 text-primary" />
                   </div>
-                  <p className="text-sm text-muted-foreground mb-1">Year Built</p>
-                  <p className="text-xl font-bold">{property.yearBuilt}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Listed</p>
+                  <p className="text-xl font-bold">{new Date(property.createdAt).toLocaleDateString('de-DE')}</p>
                 </div>
               </div>
 
@@ -183,22 +223,6 @@ export default function PropertyDetailPage() {
                 <h2 className="text-2xl font-bold mb-4">Description</h2>
                 <p className="text-muted-foreground leading-relaxed text-lg">{property.description}</p>
               </div>
-
-              {property.features && property.features.length > 0 && (
-                <div>
-                  <h2 className="text-2xl font-bold mb-4">Features & Amenities</h2>
-                  <div className="grid md:grid-cols-2 gap-3">
-                    {property.features.map((feature, index) => (
-                      <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Check className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="text-base">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -206,54 +230,97 @@ export default function PropertyDetailPage() {
             <Card className="sticky top-24 border-2 shadow-lg">
               <CardContent className="p-8 space-y-6">
                 <div className="pb-6 border-b">
-                  <p className="text-4xl font-bold text-primary mb-2">${property.price.toLocaleString()}</p>
+                  <p className="text-4xl font-bold text-primary mb-2">{formatPrice(property.price)}</p>
                   <p className="text-base text-muted-foreground">
-                    ${Math.round(property.price / property.squareFeet).toLocaleString()} per sq ft
+                    {Math.round(property.price / property.squareMeters).toLocaleString('de-DE')} €/m²
                   </p>
                 </div>
+ 
 
-                {user ? (
-                  <div className="space-y-3">
-                    <Button className="w-full h-12 text-base font-medium shadow-sm" size="lg">
-                      Schedule Tour
-                    </Button>
-                    <Button variant="outline" className="w-full h-12 text-base font-medium bg-background" size="lg">
-                      Make an Offer
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <Button
-                      className="w-full h-12 text-base font-medium shadow-sm"
-                      size="lg"
-                      onClick={() => router.push("/login")}
-                    >
-                      Sign In to Contact
-                    </Button>
-                  </div>
-                )}
 
-                <div className="pt-6 border-t space-y-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-base">Contact Agent</h3>
-                      <p className="text-sm text-muted-foreground">Available 24/7</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <Button variant="outline" className="w-full justify-start gap-3 h-11 bg-background">
-                      <Phone className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">(555) 123-4567</span>
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start gap-3 h-11 bg-background">
-                      <Mail className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">agent@realestatepro.com</span>
-                    </Button>
-                  </div>
+{user ? (
+  <div className="space-y-6">
+    <div className="pt-6 border-t space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <User className="h-6 w-6 text-primary" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-base">
+            {sellerContact ? 
+              `${sellerContact.first_name} ${sellerContact.last_name}` : 
+              property.seller.name
+            }
+          </h3>
+          <p className="text-sm text-muted-foreground">Property Owner</p>
+        </div>
+      </div>
+      
+      <div className="space-y-3">
+        {isLoadingContact ? (
+          <div className="space-y-2">
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
+          </div>
+        ) : sellerContact ? (
+          <div className="space-y-3">
+            {sellerContact.phone && (
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                <Phone className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Phone</p>
+                  <p className="text-sm text-muted-foreground">{sellerContact.phone}</p>
                 </div>
+              </div>
+            )}
+            {sellerContact.email && (
+              <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                <Mail className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Email</p>
+                  <p className="text-sm text-muted-foreground">{sellerContact.email}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+              <Phone className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Phone</p>
+                <p className="text-sm text-muted-foreground">Contact for phone number</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+              <Mail className="h-4 w-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Email</p>
+                <p className="text-sm text-muted-foreground">Contact via email</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+) : (
+  <div className="space-y-3">
+    <Button 
+      className="w-full h-12 text-base font-medium shadow-sm" 
+      size="lg"
+      onClick={() => router.push("/login")}
+    >
+      Sign In to Contact Seller
+    </Button>
+    <div className="text-center text-sm text-muted-foreground p-4 bg-muted/30 rounded-lg">
+      <p>Create an account to view contact information and save properties to your wishlist</p>
+    </div>
+  </div>
+)}
+
+
+
               </CardContent>
             </Card>
           </div>

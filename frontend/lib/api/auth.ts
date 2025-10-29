@@ -332,4 +332,52 @@ export const usersApi = {
     
     return response.json();
   },
-};
+
+
+
+  // lib/api/auth.ts
+  async login(credentials: { email: string; password: string }) {
+    const response = await fetch(`${API_BASE_URL}/users/login/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    })
+    
+    if (!response.ok) {
+      throw new Error('Login failed')
+    }
+    
+    return response.json()
+  },
+
+  async logout() {
+    // Optional: Call backend logout if you have it
+    // Otherwise just clear frontend tokens
+    localStorage.removeItem("access_token")
+    localStorage.removeItem("refresh_token")
+    localStorage.removeItem("user")
+  },
+
+  async getCurrentUser() {
+    const token = localStorage.getItem("access_token")
+    if (!token) {
+      throw new Error('No token found')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/users/profile/`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to get user data')
+    }
+    
+    return response.json()
+  },
+}

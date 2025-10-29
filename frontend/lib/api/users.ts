@@ -126,4 +126,33 @@ async submitVerification(file: File): Promise<any> {
   
   return response.json();
 },
-};
+
+ 
+
+  async getSellerContact(sellerId: string): Promise<{
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    is_verified: boolean;
+  }> {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/users/seller/${sellerId}/contact/`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch seller contact: ${response.statusText}`)
+    }
+    
+    return response.json()
+  },
+}

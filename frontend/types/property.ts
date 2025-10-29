@@ -1,5 +1,5 @@
-export type PropertyType = "house" | "apartment" | "condo" | "townhouse" | "land" | "commercial"
-export type PropertyStatus = "active" | "pending" | "sold" | "draft"
+export type PropertyType = "house" | "apartment"   | "land" | "commercial"
+export type PropertyStatus = "active" | "inactive" | "draft" // Make sure this includes "inactive"
 
 export interface Property {
   id: string
@@ -7,31 +7,24 @@ export interface Property {
   description: string
   address: string
   city: string
-  state: string
-  zipCode: string
   price: number
   bedrooms: number
-  bathrooms: number
-  squareFeet: number
-  lotSize?: number
+  squareMeters: number
   type: PropertyType
   status: PropertyStatus
   images: PropertyImage[]
-  features: string[]
-  yearBuilt?: number
   seller: {
     id: string
     name: string
-    email: string
-    phone: string
-    avatar?: string
+    email?: string  // Add optional email
+    phone?: string  // Add optional phone
   }
   createdAt: string
   updatedAt: string
-  views: number
-  isFeatured: boolean
+  inWishlist: boolean
 }
 
+ 
 export interface PropertyImage {
   id: string
   url: string
@@ -44,33 +37,23 @@ export interface PropertyFormData {
   description: string
   address: string
   city: string
-  state: string
-  zipCode: string
   price: number
   bedrooms: number
-  bathrooms: number
-  squareFeet: number
-  lotSize?: number
+  squareMeters: number // Changed from squareFeet
   type: PropertyType
-  features: string[]
-  yearBuilt?: number
   images: File[]
+  status?: PropertyStatus // Added status for updates
+ is_available: boolean;
 }
 
 export interface PropertyFilters {
   search?: string
   city?: string
-  state?: string
+  property_type?: PropertyType // Changed from type
   minPrice?: number
   maxPrice?: number
   bedrooms?: number
-  bathrooms?: number
-  minSquareFeet?: number
-  maxSquareFeet?: number
-  type?: PropertyType
-  status?: PropertyStatus
-  page?: number
-  limit?: number
+ 
 }
 
 export interface PropertySearchResponse {

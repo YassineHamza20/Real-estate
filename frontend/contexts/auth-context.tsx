@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (usernameOrEmail: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  checkTokenExpiration: () => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -19,18 +20,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  const checkTokenExpiration = () => {
+    const token = localStorage.getItem("access_token")
+    if (!token) {
+      logout()
+      return false
+    }
+    
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      const isExpired = payload.exp * 1000 < Date.now()
+      if (isExpired) {
+        logout()
+        return false
+      }
+      return true
+    } catch {
+      logout()
+      return false
+    }
+  }
+
   useEffect(() => {
     // Check for existing session on mount
     const initAuth = async () => {
       try {
-        const token = localStorage.getItem("auth_token")
-        if (token) {
+        const token = localStorage.getItem("access_token")
+        if (token && checkTokenExpiration()) {
           const currentUser = await authApi.getCurrentUser()
           setUser(currentUser)
         }
       } catch (error) {
         console.error("[v0] Failed to restore session:", error)
-        localStorage.removeItem("auth_token")
+        localStorage.removeItem("access_token")
         localStorage.removeItem("refresh_token")
       } finally {
         setIsLoading(false)
@@ -46,8 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: password 
     })
     
-    // Store tokens from Django response
-    localStorage.setItem('auth_token', response.access)
+    // Store tokens with consistent keys (access_token instead of auth_token)
+    localStorage.setItem('access_token', response.access)
     localStorage.setItem('refresh_token', response.refresh)
     
     // Set user data exactly as returned from Django
@@ -55,17 +77,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await authApi.logout()
-    setUser(null)
+    try {
+      await authApi.logout()
+    } catch (error) {
+      console.error("[v0] Error during logout:", error)
+    } finally {
+      // Always clear local storage and state
+      localStorage.removeItem("access_token")
+      localStorage.removeItem("refresh_token")
+      localStorage.removeItem("user")
+      setUser(null)
+    }
   }
 
   const refreshUser = async () => {
     try {
+      if (!checkTokenExpiration()) {
+        throw new Error("Token expired")
+      }
       const currentUser = await authApi.getCurrentUser()
       setUser(currentUser)
     } catch (error) {
       console.error("[v0] Failed to refresh user:", error)
-      setUser(null)
+      await logout()
     }
   }
 
@@ -78,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         refreshUser,
+        checkTokenExpiration,
       }}
     >
       {children}

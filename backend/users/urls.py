@@ -20,4 +20,7 @@ urlpatterns = [
     # Password reset
       path('password-reset/', views.password_reset_request, name='password-reset-request'),
     path('password-reset-confirm/<str:uid>/<str:token>/', views.password_reset_confirm, name='password-reset-confirm'),
+
+ path('seller/<int:seller_id>/contact/', views.get_seller_contact_info, name='seller-contact-info'),
+
 ]

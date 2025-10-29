@@ -9,7 +9,9 @@ import { propertiesApi } from "@/lib/api/properties"
 import type { Property, PropertyFilters as Filters } from "@/types/property"
 import { SlidersHorizontal, Grid3x3, List } from "lucide-react"
 import { Footer } from "@/components/footer"
-
+import { useAuth } from "@/contexts/auth-context"
+import { API_BASE_URL } from "@/lib/constants"
+ 
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -17,22 +19,33 @@ export default function PropertiesPage() {
   const [filters, setFilters] = useState<Filters>({})
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
+   const { user, isAuthenticated } = useAuth() // Add isAuthenticated here
   useEffect(() => {
     loadProperties()
   }, [filters])
+ 
 
-  const loadProperties = async () => {
-    setIsLoading(true)
-    try {
-      const response = await propertiesApi.getProperties(filters)
-      setProperties(response.properties)
-    } catch (error) {
-      console.error("[v0] Failed to load properties:", error)
-    } finally {
-      setIsLoading(false)
-    }
+
+
+const loadProperties = async () => {
+  setIsLoading(true)
+  try {
+    console.log('=== AUTH DEBUG ===')
+    console.log('Is authenticated:', isAuthenticated)
+    console.log('User:', user)
+    console.log('Access token exists:', !!localStorage.getItem('access_token'))
+    
+    const propertiesData = await propertiesApi.getProperties(filters)
+    console.log('Properties loaded:', propertiesData)
+    
+    setProperties(propertiesData)
+  } catch (error) {
+    console.error("[v0] Failed to load properties:", error)
+    setProperties([])
+  } finally {
+    setIsLoading(false)
   }
-
+}
   return (
     <div className="min-h-screen bg-muted/30">
       <div className="container mx-auto px-4 py-8">

@@ -151,3 +151,42 @@ def check_wishlist_status(request, property_id):
         "property_id": property_id,
         "in_wishlist": in_wishlist
     })
+
+
+ # properties/views.py
+class PropertyImageListView(generics.ListCreateAPIView):
+    serializer_class = PropertyImageSerializer
+    permission_classes = [permissions.IsAuthenticated, IsPropertyOwnerOrReadOnly]
+
+    def get_queryset(self):
+        property_id = self.kwargs['property_id']
+        return PropertyImage.objects.filter(property_id=property_id)
+
+    def perform_create(self, serializer):
+        property_id = self.kwargs['property_id']
+        property_obj = Property.objects.get(id=property_id)
+        # Check if user owns the property - compare IDs, not objects
+        if property_obj.seller.id != self.request.user.id:
+            raise permissions.PermissionDenied("You don't own this property")
+        serializer.save(property=property_obj)
+
+
+
+# properties/views.py
+class PropertyImageDetailView(generics.DestroyAPIView):
+    serializer_class = PropertyImageSerializer
+    permission_classes = [permissions.IsAuthenticated, IsPropertyOwnerOrReadOnly]
+    
+    def get_queryset(self):
+        return PropertyImage.objects.filter(property__seller=self.request.user)
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        obj = generics.get_object_or_404(queryset, pk=self.kwargs['pk'])
+        return obj
+
+    def perform_destroy(self, instance):
+        # Delete the actual file from storage
+        if instance.image:
+            instance.image.delete()
+        instance.delete()

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,15 +10,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { propertiesApi } from "@/lib/api/properties"
+import type { Property } from "@/types/property"
 import { PROPERTY_TYPES } from "@/lib/constants"
 import { ArrowLeft, Loader2, Upload, X } from "lucide-react"
 import Link from "next/link"
 
-export default function NewPropertyPage() {
+export default function EditPropertyPage() {
+  const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [images, setImages] = useState<File[]>([])
+  const [existingImages, setExistingImages] = useState<any[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -31,9 +35,44 @@ export default function NewPropertyPage() {
     is_available: true,
   })
 
+  useEffect(() => {
+    loadProperty()
+  }, [params.id])
+
+  const loadProperty = async () => {
+    try {
+      setIsLoading(true)
+      const property = await propertiesApi.getProperty(params.id as string)
+      
+      setFormData({
+        name: property.name,
+        description: property.description,
+        address: property.address,
+        city: property.city,
+        price: property.price,
+        number_of_rooms: property.bedrooms,
+        size: property.squareMeters,
+        property_type: property.type,
+        is_available: property.status === "active",
+      })
+      
+      setExistingImages(property.images || [])
+    } catch (error) {
+      console.error("[v0] Failed to load property:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load property data",
+        variant: "destructive",
+      })
+      router.push("/dashboard")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    if (images.length + files.length > 10) {
+    if (existingImages.length + images.length + files.length > 10) {
       toast({
         title: "Too many images",
         description: "You can upload a maximum of 10 images",
@@ -46,6 +85,24 @@ export default function NewPropertyPage() {
 
   const removeImage = (index: number) => {
     setImages(images.filter((_, i) => i !== index))
+  }
+
+  const removeExistingImage = async (imageId: string, index: number) => {
+    try {
+      await propertiesApi.deletePropertyImage(imageId)
+      setExistingImages(existingImages.filter((_, i) => i !== index))
+      toast({
+        title: "Success",
+        description: "Image removed successfully",
+      })
+    } catch (error) {
+      console.error("[v0] Failed to delete image:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete image",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,24 +120,51 @@ export default function NewPropertyPage() {
     try {
       setIsSubmitting(true)
       
-      // Create the property with images
-      await propertiesApi.createProperty(formData, images)
+      // Update the property using your new method
+      await propertiesApi.updateProperty(params.id as string, {
+        name: formData.name,
+        description: formData.description,
+        address: formData.address,
+        city: formData.city,
+        price: formData.price,
+        bedrooms: formData.number_of_rooms,
+        squareMeters: formData.size,
+        type: formData.property_type,
+        status: formData.is_available ? "active" : "inactive",
+      })
+
+      // Upload new images if any
+      if (images.length > 0) {
+        for (const image of images) {
+          await propertiesApi.uploadPropertyImage(params.id as string, image)
+        }
+      }
 
       toast({
         title: "Success",
-        description: "Property created successfully",
+        description: "Property updated successfully",
       })
       router.push("/dashboard")
-    } catch (error: any) {
-      console.error("[v0] Failed to create property:", error)
+    } catch (error) {
+      console.error("[v0] Failed to update property:", error)
       toast({
         title: "Error",
-        description: error.message || "Failed to create property. Please try again.",
+        description: "Failed to update property. Please try again.",
         variant: "destructive",
       })
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -92,8 +176,8 @@ export default function NewPropertyPage() {
             Back to Dashboard
           </Link>
         </Button>
-        <h1 className="text-4xl font-bold mb-2">List New Property</h1>
-        <p className="text-lg text-muted-foreground">Create a new property listing to attract potential buyers</p>
+        <h1 className="text-4xl font-bold mb-2">Edit Property</h1>
+        <p className="text-lg text-muted-foreground">Update your property listing details</p>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -249,7 +333,7 @@ export default function NewPropertyPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="images">Upload Images (Max 10)</Label>
+                <Label htmlFor="images">Upload New Images (Max 10)</Label>
                 <Input
                   id="images"
                   type="file"
@@ -258,15 +342,37 @@ export default function NewPropertyPage() {
                   onChange={handleImageChange}
                   className="cursor-pointer"
                 />
-                <p className="text-sm text-muted-foreground">
-                  Upload up to 10 images of your property
-                </p>
               </div>
 
-              {/* Image Previews */}
+              {/* Existing Images */}
+              {existingImages.length > 0 && (
+                <div className="space-y-3">
+                  <Label>Current Images</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {existingImages.map((image, index) => (
+                      <div key={image.id} className="relative group">
+                        <img
+                          src={image.url || "/placeholder.svg"}
+                          alt={`Current image ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg border-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExistingImage(image.id, index)}
+                          className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* New Images */}
               {images.length > 0 && (
                 <div className="space-y-3">
-                  <Label>Image Previews</Label>
+                  <Label>New Images to Upload</Label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {images.map((image, index) => (
                       <div key={index} className="relative group">
@@ -295,12 +401,12 @@ export default function NewPropertyPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Property...
+                  Updating Property...
                 </>
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Create Property
+                  Update Property
                 </>
               )}
             </Button>

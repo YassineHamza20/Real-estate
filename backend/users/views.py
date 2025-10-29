@@ -279,3 +279,26 @@ def password_reset_confirm(request, uid, token):
             "message": "Password has been reset successfully."
         }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+ 
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_seller_contact_info(request, seller_id):
+    """Get seller contact information for authenticated users"""
+    try:
+        seller = User.objects.get(id=seller_id, role=User.Role.SELLER)
+        
+        # Return basic contact info
+        return Response({
+            "id": seller.id,
+            "name": seller.username,
+             "first_name": seller.first_name,  # Add these
+            "last_name": seller.last_name,    # Add the
+            "email": seller.email,
+            "phone": seller.phone_number,
+            "is_verified": hasattr(seller, 'seller_verification') and 
+                          seller.seller_verification.status == 'approved'
+        })
+    except User.DoesNotExist:
+        return Response({"error": "Seller not found"}, status=status.HTTP_404_NOT_FOUND)

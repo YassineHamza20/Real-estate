@@ -9,14 +9,17 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'is_primary', 'uploaded_at']
 
 # ADD THIS MISSING SERIALIZER
+# properties/serializers.py
 class PropertyCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Property
         fields = [
-            'name', 'description', 'address', 'city', 
-            'price', 'number_of_rooms', 'size', 'property_type'
+            'id', 'name', 'description', 'address', 'city', 
+            'price', 'number_of_rooms', 'size', 'property_type', 'is_available'
         ]
+        read_only_fields = ['id']  # Make id read-only but still include it
 
+# properties/serializers.py
 class PropertySerializer(serializers.ModelSerializer):
     images = PropertyImageSerializer(many=True, read_only=True)
     seller_name = serializers.CharField(source='seller.username', read_only=True)
@@ -30,7 +33,7 @@ class PropertySerializer(serializers.ModelSerializer):
             'is_available', 'seller', 'seller_name', 'images',
             'in_wishlist', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['seller', 'created_at', 'updated_at']
+        read_only_fields = ['seller', 'created_at', 'updated_at']  # Remove 'id' from here
 
     def get_in_wishlist(self, obj):
         request = self.context.get('request')
@@ -46,3 +49,5 @@ class WishlistSerializer(serializers.ModelSerializer):
         model = Wishlist
         fields = ['id', 'property', 'property_details', 'created_at']
         read_only_fields = ['user', 'created_at']
+
+

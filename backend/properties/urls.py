@@ -9,7 +9,8 @@ urlpatterns = [
     path('<int:property_id>/images/', views.PropertyImageView.as_view(), name='property-images'),
     path('filters/options/', views.property_filters, name='property-filters'),
 
-
+    path('<int:property_id>/images/', views.PropertyImageListView.as_view(), name='property-images-list'),
+    path('images/<int:pk>/', views.PropertyImageDetailView.as_view(), name='property-image-detail'),
 
     # Wishlist URLs
     path('wishlist/', views.WishlistListView.as_view(), name='wishlist-list'),

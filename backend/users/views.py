@@ -183,47 +183,89 @@ class SellerVerificationView(generics.CreateAPIView):
             raise permissions.PermissionDenied("Only sellers can submit verification.")
         serializer.save(user=self.request.user)
 
-# users/views.py - Temporary debug version
-@api_view(['POST'])
+
+
+# users/views.py
+
+@api_view(['POST', 'DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def submit_verification(request):
-    print(f"Request method: {request.method}")
-    print(f"Request content type: {request.content_type}")
-    print(f"Request FILES: {request.FILES}")
-    print(f"Request DATA: {request.data}")
-    print(f"User role: {request.user.role}")
-    
-    if request.user.role != User.Role.BUYER:
-        return Response({"error": "Only buyers can submit seller verification"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    if hasattr(request.user, 'seller_verification'):
-        return Response({"error": "Verification already submitted"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        serializer = SellerVerificationSerializer(data=request.data)
-        print(f"Serializer data: {request.data}")
-        print(f"Serializer is valid: {serializer.is_valid()}")
+    """
+    POST  → Submit a new verification document (only buyers, no existing submission)
+    DELETE → Delete the current verification document (reset to "none")
+    """
+    # ---------- POST: Submit new document ----------
+    if request.method == 'POST':
+        print(f"[POST] User: {request.user.id}, Role: {request.user.role}")
+
+        if request.user.role != User.Role.BUYER:
+            return Response(
+                {"error": "Only buyers can submit verification"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        if not serializer.is_valid():
-            print(f"Serializer errors: {serializer.errors}")
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        verification = serializer.save(user=request.user)
-        print(f"Verification created: {verification.id}")
-        
+        if hasattr(request.user, 'seller_verification'):
+            return Response(
+                {"error": "Verification already submitted"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            serializer = SellerVerificationSerializer(data=request.data, context={'request': request})
+            if not serializer.is_valid():
+                print(f"Serializer errors: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            verification = serializer.save(user=request.user)
+            document_url = request.build_absolute_uri(verification.document.url) if verification.document else None
+
+            return Response({
+                "message": "Verification submitted successfully",
+                "status": verification.status,
+                "submitted_at": verification.submitted_at,
+                "document_name": verification.document.name if verification.document else None,
+                "document_url": document_url
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            import traceback
+            print(f"Error: {str(e)}\n{traceback.format_exc()}")
+            return Response(
+                {"error": f"Server error: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # ---------- DELETE: Remove existing document ----------
+    elif request.method == 'DELETE':
+        print(f"[DELETE] User: {request.user.id} attempting to delete verification")
+
+        if request.user.role != User.Role.BUYER:
+            return Response(
+                {"error": "Only buyers can delete their verification"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            verification = request.user.seller_verification
+        except User.seller_verification.RelatedObjectDoesNotExist:
+            return Response(
+                {"error": "No verification document to delete"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Delete file from storage
+        if verification.document:
+            verification.document.delete(save=False)  # Remove file
+
+        # Delete DB record
+        verification.delete()
+
         return Response({
-            "message": "Verification submitted successfully",
-            "status": verification.status,
-            "submitted_at": verification.submitted_at
-        }, status=status.HTTP_201_CREATED)
-        
-    except Exception as e:
-        import traceback
-        print(f"Error: {str(e)}")
-        print(f"Traceback: {traceback.format_exc()}")
-        return Response({
-            "error": f"Server error: {str(e)}"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            "message": "Verification document deleted successfully",
+            "status": "none"
+        }, status=status.HTTP_200_OK)
+
+    
 # users/views.py
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])

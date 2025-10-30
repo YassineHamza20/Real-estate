@@ -240,10 +240,10 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
               <span className="font-medium">{formatSquareMeters(property.squareMeters)} m²</span>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="gap-1">
+          {/* <Button variant="outline" size="sm" className="gap-1">
             <Eye className="h-3 w-3" />
             View
-          </Button>
+          </Button> */}
         </CardFooter>
       </Link>
     </Card>

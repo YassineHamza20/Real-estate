@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -10,23 +10,27 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/auth-context"
 import { usersApi } from "@/lib/api/users"
 import type { UserProfile } from "@/types/user"
-import { Home, Eye, DollarSign, MessageSquare, Plus, Pencil, Trash2, Loader2, User, Mail, Phone, Camera, Heart, MapPin, Bed, Square, Building2 } from "lucide-react"
+import {
+  Home, Eye, DollarSign, MessageSquare, Plus, Pencil, Trash2,
+  Loader2, User, Mail, Phone, Camera, Heart, MapPin, Bed, Square,
+  Search, ArrowUpDown, RefreshCw
+} from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { propertiesApi } from "@/lib/api/properties"
 import type { Property } from "@/types/property"
 import { useToast } from "@/hooks/use-toast"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import Image from "next/image"
+import { motion } from "framer-motion"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select"
 
 export function SellerDashboard() {
   const { user, refreshUser } = useAuth()
@@ -37,27 +41,47 @@ export function SellerDashboard() {
   const [isLoadingWishlist, setIsLoadingWishlist] = useState(false)
   const [deletePropertyId, setDeletePropertyId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  
-  // Profile states
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<"price" | "date" | "status">("date")
+
+  // Profile
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isProfileLoading, setIsProfileLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [personalInfo, setPersonalInfo] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone_number: "",
-    username: "",
-    role: "seller",
+    first_name: "", last_name: "", email: "", phone_number: "", username: "", role: "seller"
   })
+
+  // Refresh
+  const handleRefresh = useCallback(() => {
+    loadMyProperties()
+    loadWishlist()
+    toast({ title: "Refreshing...", description: "Updating your data" })
+  }, [])
 
   useEffect(() => {
     loadMyProperties()
     loadProfile()
     loadWishlist()
-  }, [])
+  }, [handleRefresh])
 
-  // Add wishlist functionality
+  // Keyboard shortcuts
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        document.querySelector('a[href="/dashboard/properties/new"]')?.click()
+      }
+      if (e.key === "r" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        handleRefresh()
+      }
+    }
+    document.addEventListener("keydown", down)
+    return () => document.removeEventListener("keydown", down)
+  }, [handleRefresh])
+
+  // Wishlist
   const loadWishlist = async () => {
     try {
       setIsLoadingWishlist(true)
@@ -65,11 +89,7 @@ export function SellerDashboard() {
       setSavedProperties(wishlist)
     } catch (error) {
       console.error("[v0] Failed to load wishlist:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load saved properties",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to load saved properties", variant: "destructive" })
     } finally {
       setIsLoadingWishlist(false)
     }
@@ -78,44 +98,26 @@ export function SellerDashboard() {
   const handleRemoveFromWishlist = async (propertyId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
     try {
       await propertiesApi.toggleWishlist(propertyId)
-      toast({
-        title: "Removed from favorites",
-        description: "Property removed from your wishlist",
-      })
-      // Refresh the wishlist
+      toast({ title: "Removed", description: "Property removed from wishlist" })
       await loadWishlist()
     } catch (error) {
-      console.error("[v0] Failed to remove from wishlist:", error)
-      toast({
-        title: "Error",
-        description: "Failed to remove from favorites",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to remove", variant: "destructive" })
     }
   }
 
-  // Helper functions for formatting
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      maximumFractionDigits: 0,
-    }).format(price)
-  }
+  // Formatters
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(price)
+  const formatSquareMeters = (sqm: number) => new Intl.NumberFormat('de-DE').format(sqm)
 
-  const formatSquareMeters = (sqm: number) => {
-    return new Intl.NumberFormat('de-DE').format(sqm)
-  }
-
+  // Profile
   const loadProfile = async () => {
     try {
       setIsProfileLoading(true)
       const data = await usersApi.getProfile()
       setProfile(data)
-      
       setPersonalInfo({
         first_name: data.first_name || "",
         last_name: data.last_name || "",
@@ -126,19 +128,13 @@ export function SellerDashboard() {
       })
     } catch (error: any) {
       console.error("[v0] Failed to load profile:", error)
-      if (error.message === 'Not authenticated') {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to access your profile",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to load profile data",
-          variant: "destructive",
-        })
-      }
+      toast({
+        title: error.message === 'Not authenticated' ? "Login Required" : "Error",
+        description: error.message === 'Not authenticated'
+          ? "Please log in to view your profile"
+          : "Failed to load profile",
+        variant: "destructive",
+      })
     } finally {
       setIsProfileLoading(false)
     }
@@ -149,30 +145,21 @@ export function SellerDashboard() {
       setIsSaving(true)
       await usersApi.updateProfile(personalInfo)
       await refreshUser()
-      toast({
-        title: "Success",
-        description: "Profile updated successfully",
-      })
+      toast({ title: "Saved!", description: "Profile updated successfully" })
     } catch (error: any) {
-      console.error("[v0] Failed to update profile:", error)
-      if (error.message === 'Not authenticated') {
-        toast({
-          title: "Session Expired",
-          description: "Please log in again",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update profile. Please try again.",
-          variant: "destructive",
-        })
-      }
+      toast({
+        title: error.message === 'Not authenticated' ? "Session Expired" : "Error",
+        description: error.message === 'Not authenticated'
+          ? "Please log in again"
+          : "Failed to save profile",
+        variant: "destructive",
+      })
     } finally {
       setIsSaving(false)
     }
   }
 
+  // Listings
   const loadMyProperties = async () => {
     try {
       setIsLoading(true)
@@ -180,11 +167,7 @@ export function SellerDashboard() {
       setMyListings(properties)
     } catch (error) {
       console.error("[v0] Failed to load properties:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load your properties",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to load your listings", variant: "destructive" })
     } finally {
       setIsLoading(false)
     }
@@ -192,437 +175,408 @@ export function SellerDashboard() {
 
   const handleDeleteProperty = async () => {
     if (!deletePropertyId) return
-
     try {
       setIsDeleting(true)
       await propertiesApi.deleteProperty(deletePropertyId)
-      setMyListings(myListings.filter((p) => p.id !== deletePropertyId))
-      toast({
-        title: "Success",
-        description: "Property deleted successfully",
-      })
+      setMyListings(prev => prev.filter(p => p.id !== deletePropertyId))
+      toast({ title: "Deleted", description: "Property removed" })
     } catch (error) {
-      console.error("[v0] Failed to delete property:", error)
-      toast({
-        title: "Error",
-        description: "Failed to delete property",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to delete", variant: "destructive" })
     } finally {
       setIsDeleting(false)
       setDeletePropertyId(null)
     }
   }
 
-  const activeListings = myListings.filter((p) => p.status === "active").length
-
-  // Get user's first name for welcome message
+  // Computed
+  const activeListings = myListings.filter(p => p.status === "active").length
   const displayName = personalInfo.first_name || user?.first_name || user?.username || "Seller"
-  
-  // Get initials for avatar
-  const firstName = personalInfo.first_name || ""
-  const lastName = personalInfo.last_name || ""
-  const initials = firstName && lastName ? `${firstName[0]}${lastName[0]}`.toUpperCase() : 
-                  user?.username ? user.username[0].toUpperCase() : "S"
+  const initials = (personalInfo.first_name?.[0] || "") + (personalInfo.last_name?.[0] || "") || user?.username?.[0] || "S"
+
+  // Filtered & Sorted Listings
+  const filteredListings = useMemo(() => {
+    let filtered = myListings.filter(p =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.city.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+
+    return filtered.sort((a, b) => {
+      if (sortBy === "price") return b.price - a.price
+      if (sortBy === "date") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      if (sortBy === "status") return a.status.localeCompare(b.status)
+      return 0
+    })
+  }, [myListings, searchQuery, sortBy])
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* Header */}
+      <div className="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold mb-2">Welcome back, {displayName}!</h1>
-          <p className="text-lg text-muted-foreground">Manage your property listings and track performance</p>
+          <h1 className="text-3xl sm:text-4xl font-bold">Welcome back, {displayName}!</h1>
+          <p className="text-muted-foreground mt-1">Manage your listings and track performance</p>
         </div>
-        <Button asChild size="lg" className="gap-2 font-medium shadow-sm h-12 px-6">
-          <Link href="/dashboard/properties/new">
-            <Plus className="h-5 w-5" />
-            List New Property
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button asChild size="lg" className="h-12 px-6 font-medium shadow-md">
+            <Link href="/dashboard/properties/new">
+              <Plus className="h-5 w-5 mr-2" />
+              New Listing
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid md:grid-cols-4 gap-6 mb-8">
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active Listings</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Home className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{activeListings}</div>
-            <p className="text-xs text-muted-foreground mt-1">{myListings.length} total listings</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Saved Properties</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Heart className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{savedProperties.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">In your wishlist</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Offers Received</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground mt-1">3 pending review</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Messages</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <MessageSquare className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">15</div>
-            <p className="text-xs text-muted-foreground mt-1">5 unread</p>
-          </CardContent>
-        </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        {[
+          { title: "Active", value: activeListings, sub: `${myListings.length} total`, icon: Home },
+          { title: "Saved", value: savedProperties.length, sub: "Wishlist", icon: Heart },
+          { title: "Offers", value: 8, sub: "3 pending", icon: DollarSign },
+          { title: "Messages", value: 15, sub: "5 unread", icon: MessageSquare },
+        ].map((stat, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1 }}
+          >
+            <Card className="border hover:border-primary/50 transition-all hover:shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                  <stat.icon className="h-4 w-4 text-primary" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">{stat.sub}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
       </div>
 
-      {/* Main Tabs */}
+      {/* Tabs */}
       <Tabs defaultValue="listings" className="space-y-6">
-        <TabsList className="bg-background border-2">
-          <TabsTrigger value="listings" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <Home className="h-4 w-4 mr-2" />
-            My Listings
-          </TabsTrigger>
-          <TabsTrigger value="saved" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <Heart className="h-4 w-4 mr-2" />
-            Saved Properties
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <User className="h-4 w-4 mr-2" />
-            Profile
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 bg-card border">
+          <TabsTrigger value="listings"><Home className="h-4 w-4 mr-2" />Listings</TabsTrigger>
+          <TabsTrigger value="saved"><Heart className="h-4 w-4 mr-2" />Saved</TabsTrigger>
+          <TabsTrigger value="profile"><User className="h-4 w-4 mr-2" />Profile</TabsTrigger>
         </TabsList>
 
-        {/* My Listings Tab */}
+        {/* My Listings */}
         <TabsContent value="listings" className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
             <div>
-              <h2 className="text-3xl font-bold">My Property Listings</h2>
-              <p className="text-muted-foreground text-lg">Manage and track your listed properties</p>
+              <h2 className="text-2xl font-bold">My Listings</h2>
+              <p className="text-muted-foreground">Edit, view, or delete your properties</p>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or city..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-10 w-full sm:w-64"
+                />
+              </div>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Latest</SelectItem>
+                  <SelectItem value="price">Price</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : myListings.length === 0 ? (
-            <Card className="border-2 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                  <Home className="h-10 w-10 text-primary" />
-                </div>
-                <h3 className="text-2xl font-semibold mb-2">No listings yet</h3>
-                <p className="text-muted-foreground text-center mb-6 max-w-md leading-relaxed">
-                  Start by creating your first property listing
-                </p>
-                <Button asChild size="lg" className="font-medium">
-                  <Link href="/dashboard/properties/new">Create Listing</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
             <div className="space-y-4">
-              {myListings.map((property) => (
-                <Card key={property.id} className="border-2 hover:border-primary/50 transition-colors">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex gap-4 flex-1">
-                        <div className="w-32 h-24 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-                          {property.images[0] && (
-                            <img
-                              src={property.images[0].url || "/placeholder.svg"}
-                              alt={property.name}
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-lg">{property.name}</h3>
-                            <Badge
-                              variant={property.status === "active" ? "default" : "secondary"}
-                              className="capitalize"
-                            >
-                              {property.status}
-                            </Badge>
-                          </div>
-                          
-                          <p className="text-lg font-bold text-primary">{formatPrice(property.price)}</p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-                            <div className="flex items-center gap-1">
-                              <Bed className="h-3 w-3" />
-                              <span>{property.bedrooms} rooms</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Square className="h-3 w-3" />
-                              <span>{formatSquareMeters(property.squareMeters)} m²</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              <span>{property.city}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/dashboard/properties/${property.id}/edit`}>
-                            <Pencil className="h-4 w-4 mr-1" />
-                            Edit
-                          </Link>
-                        </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/properties/${property.id}`}>
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDeletePropertyId(property.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+              {[...Array(3)].map((_, i) => (
+                <Card key={i}>
+                  <CardContent className="p-5">
+                    <div className="flex gap-4">
+                      <Skeleton className="w-28 h-20 rounded-lg" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-5 w-48" />
+                        <Skeleton className="h-6 w-32" />
+                        <Skeleton className="h-4 w-64" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
-          )}
-        </TabsContent>
-
-        {/* Saved Properties Tab */}
-        <TabsContent value="saved" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold">Saved Properties</h2>
-              <p className="text-muted-foreground text-lg">Properties you've marked as favorites</p>
-            </div>
-            <Button asChild size="lg" className="font-medium">
-              <Link href="/properties">Browse More</Link>
-            </Button>
-          </div>
-
-          {isLoadingWishlist ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : savedProperties.length === 0 ? (
-            <Card className="border-2 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                  <Heart className="h-10 w-10 text-primary" />
-                </div>
-                <h3 className="text-2xl font-semibold mb-2">No saved properties yet</h3>
-                <p className="text-muted-foreground text-center mb-6 max-w-md leading-relaxed">
-                  Start browsing properties and save your favorites to see them here
-                </p>
-                <Button asChild size="lg" className="font-medium">
-                  <Link href="/properties">Browse Properties</Link>
+          ) : filteredListings.length === 0 ? (
+            <Card className="border-dashed text-center py-16">
+              <CardContent>
+                <Home className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No listings found</h3>
+                <p className="text-muted-foreground mb-6">Try adjusting your search</p>
+                <Button asChild>
+                  <Link href="/dashboard/properties/new">Create Listing</Link>
                 </Button>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {savedProperties.map((property) => (
-                <Card key={property.id} className="overflow-hidden hover:shadow-lg transition-all border-2 hover:border-primary/50 cursor-pointer">
-                  <Link href={`/properties/${property.id}`} className="block">
-                    <div className="relative h-48 overflow-hidden">
-                      <Image
-                        src={property.images[0]?.url || "/placeholder.svg"}
-                        alt={property.name}
-                        fill
-                        className="object-cover hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute top-3 left-3">
-                        <Badge variant={property.status === "active" ? "default" : "secondary"} className="capitalize">
-                          {property.status}
-                        </Badge>
-                      </div>
-                      <div className="absolute top-3 right-3">
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="h-8 w-8 rounded-full bg-white/95 hover:bg-white shadow-lg"
-                          onClick={(e) => handleRemoveFromWishlist(property.id, e)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <CardContent className="p-4">
-                      <div className="mb-2">
-                        <p className="text-xl font-bold text-primary">{formatPrice(property.price)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Math.round(property.price / property.squareMeters).toLocaleString('de-DE')} €/m²
-                        </p>
-                      </div>
-                      <h3 className="font-semibold text-lg mb-2 line-clamp-1">{property.name}</h3>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
-                        <MapPin className="h-3 w-3 flex-shrink-0" />
-                        <span className="line-clamp-1">{property.city}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Bed className="h-3 w-3 text-muted-foreground" />
-                          <span>{property.bedrooms}</span>
+            <div className="space-y-4">
+              {filteredListings.map((property) => (
+                <motion.div
+                  key={property.id}
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <Card className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-28 h-20 bg-muted rounded-lg overflow-hidden flex-shrink-0">
+                          {property.images[0] ? (
+                            <Image
+                              src={property.images[0].url}
+                              alt={property.name}
+                              width={112}
+                              height={80}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-muted-foreground/20 flex items-center justify-center">
+                              <Home className="h-8 w-8 text-muted-foreground/40" />
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Square className="h-3 w-3 text-muted-foreground" />
-                          <span>{formatSquareMeters(property.squareMeters)} m²</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-lg">{property.name}</h3>
+                            <Badge variant={property.status === "active" ? "default" : "secondary"} className="text-xs">
+                              {property.status}
+                            </Badge>
+                          </div>
+                          <p className="text-lg font-bold text-primary">{formatPrice(property.price)}</p>
+                          <div className="flex gap-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1"><Bed className="h-3 w-3" />{property.bedrooms}</span>
+                            <span className="flex items-center gap-1"><Square className="h-3 w-3" />{formatSquareMeters(property.squareMeters)} m²</span>
+                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{property.city}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/dashboard/properties/${property.id}/edit`}>
+                              <Pencil className="h-4 w-4 mr-1" />Edit
+                            </Link>
+                          </Button>
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/properties/${property.id}`}>
+                              <Eye className="h-4 w-4 mr-1" />View
+                            </Link>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeletePropertyId(property.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
-                  </Link>
-                </Card>
+                  </Card>
+                </motion.div>
               ))}
             </div>
           )}
         </TabsContent>
 
-        {/* Profile Tab */}
-        <TabsContent value="profile" className="space-y-6">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Profile Settings</h2>
-            <p className="text-muted-foreground text-lg">Manage your personal information and account settings</p>
+        {/* Saved Properties */}
+        <TabsContent value="saved" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold mb-1">Saved Properties</h2>
+              <p className="text-muted-foreground">Your favorite listings</p>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/properties">Browse All</Link>
+            </Button>
           </div>
 
-          <Card className="border-2">
+          {isLoadingWishlist ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i}>
+                  <Skeleton className="h-48 w-full" />
+                  <CardContent className="p-4 space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-6 w-40" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : savedProperties.length === 0 ? (
+            <Card className="border-dashed text-center py-16">
+              <CardContent>
+                <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No saved properties</h3>
+                <p className="text-muted-foreground mb-6">Save properties you like</p>
+                <Button asChild>
+                  <Link href="/properties">Explore</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {savedProperties.map((property) => (
+                <motion.div
+                  key={property.id}
+                  whileHover={{ y: -4 }}
+                  className="group"
+                >
+                  <Card className="overflow-hidden border hover:border-primary/50 transition-colors">
+                    <Link href={`/properties/${property.id}`} className="block">
+                      <div className="relative h-48 bg-muted">
+                        <Image
+                          src={property.images[0]?.url || "/placeholder.svg"}
+                          alt={property.name}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <Badge className="absolute top-3 left-3 text-xs capitalize">
+                          {property.status}
+                        </Badge>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className="absolute top-3 right-3 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => handleRemoveFromWishlist(property.id, e)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                      <CardContent className="p-4">
+                        <p className="font-bold text-primary">{formatPrice(property.price)}</p>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {Math.round(property.price / property.squareMeters).toLocaleString()} €/m²
+                        </p>
+                        <h3 className="font-medium line-clamp-1 mb-2">{property.name}</h3>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1 mb-2">
+                          <MapPin className="h-3 w-3" />{property.city}
+                        </p>
+                        <div className="flex gap-3 text-sm">
+                          <span className="flex items-center gap-1"><Bed className="h-3 w-3" />{property.bedrooms}</span>
+                          <span className="flex items-center gap-1"><Square className="h-3 w-3" />{formatSquareMeters(property.squareMeters)} m²</span>
+                        </div>
+                      </CardContent>
+                    </Link>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Profile */}
+        <TabsContent value="profile" className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Profile Settings</h2>
+            <p className="text-muted-foreground">Update your personal information</p>
+          </div>
+
+          <Card>
             <CardContent className="pt-6">
-              <div className="flex items-start gap-6">
-                {/* Avatar Section */}
-                <div className="flex-shrink-0">
-                  <div className="relative group">
-                    <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                      <AvatarImage src="/placeholder.svg" alt={displayName} />
-                      <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">{initials}</AvatarFallback>
-                    </Avatar>
-                    <button className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Camera className="h-6 w-6 text-white" />
-                    </button>
+              {isProfileLoading ? (
+                <div className="flex flex-col sm:flex-row gap-6">
+                  <Skeleton className="h-24 w-24 rounded-full" />
+                  <div className="flex-1 space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {[...Array(6)].map((_, i) => (
+                        <Skeleton key={i} className="h-10 w-full" />
+                      ))}
+                    </div>
                   </div>
                 </div>
-
-                {/* Profile Info */}
-                <div className="flex-1 grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm">
-                      Username
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="username"
-                        disabled
-                        value={personalInfo.username}
-                        className="pl-9 h-9"
-                      />
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-6">
+                  <div className="flex-shrink-0">
+                    <div className="relative group">
+                      <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                        <AvatarImage src="/placeholder.svg" alt={displayName} />
+                        <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                          {initials.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <button className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                        <Camera className="h-6 w-6 text-white" />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="role" className="text-sm">
-                      Role
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="role"
-                        value="seller"
-                        disabled
-                        className="pl-9 h-9"
-                      />
+                  <div className="flex-1 space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Username</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.username} disabled className="pl-9 h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Role</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value="seller" disabled className="pl-9 h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>First Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={personalInfo.first_name}
+                            onChange={(e) => setPersonalInfo({ ...personalInfo, first_name: e.target.value })}
+                            className="pl-9 h-10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Last Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={personalInfo.last_name}
+                            onChange={(e) => setPersonalInfo({ ...personalInfo, last_name: e.target.value })}
+                            className="pl-9 h-10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.email} disabled className="pl-9 h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Phone</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={personalInfo.phone_number}
+                            onChange={(e) => setPersonalInfo({ ...personalInfo, phone_number: e.target.value })}
+                            className="pl-9 h-10"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="first_name" className="text-sm">
-                      First Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="first_name"
-                        value={personalInfo.first_name}
-                        onChange={(e) => setPersonalInfo({ ...personalInfo, first_name: e.target.value })}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="last_name" className="text-sm">
-                      Last Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="last_name"
-                        value={personalInfo.last_name}
-                        onChange={(e) => setPersonalInfo({ ...personalInfo, last_name: e.target.value })}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm">
-                      Email
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        disabled
-                        value={personalInfo.email}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone_number" className="text-sm">
-                      Phone
-                    </Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="phone_number"
-                        type="tel"
-                        value={personalInfo.phone_number}
-                        onChange={(e) => setPersonalInfo({ ...personalInfo, phone_number: e.target.value })}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-end md:col-span-2">
-                    <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full">
+                    <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full sm:w-auto">
                       {isSaving ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -634,35 +588,25 @@ export function SellerDashboard() {
                     </Button>
                   </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
+      {/* Delete Dialog */}
       <AlertDialog open={!!deletePropertyId} onOpenChange={() => setDeletePropertyId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Property</AlertDialogTitle>
+            <AlertDialogTitle>Delete Property?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this property? This action cannot be undone.
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteProperty}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
+            <AlertDialogAction onClick={handleDeleteProperty} disabled={isDeleting} className="bg-destructive">
+              {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

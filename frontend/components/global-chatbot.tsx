@@ -3,7 +3,11 @@
 import { useAuth } from "@/contexts/auth-context"
 import { Chatbot } from "@/components/chatbot"
 
-export function GlobalChatbot() {
+interface GlobalChatbotProps {
+  className?: string
+}
+
+export function GlobalChatbot({ className }: GlobalChatbotProps) {
   const { user } = useAuth()
 
   // Only show chatbot when user is logged in
@@ -11,5 +15,5 @@ export function GlobalChatbot() {
     return null
   }
 
-  return <Chatbot />
+  return <Chatbot className={className} />
 }

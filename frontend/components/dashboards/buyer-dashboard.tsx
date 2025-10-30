@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -12,23 +12,9 @@ import { useAuth } from "@/contexts/auth-context"
 import { usersApi } from "@/lib/api/users"
 import type { UserProfile } from "@/types/user"
 import {
-  Heart,
-  User,
-  Mail,
-  Phone,
-  Building2,
-  Loader2,
-  Camera,
-  Upload,
-  FileText,
-  AlertCircle,
-  CheckCircle2,
-  Eye,
-  MapPin,
-  Bed,
-  Square,
-  Trash2,
-  Home,
+  Heart, User, Mail, Phone, Building2, Loader2, Camera, Upload,
+  FileText, AlertCircle, CheckCircle2, Eye, MapPin, Bed, Square,
+  Trash2, Search, RefreshCw, X, ChevronDown, Undo2
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -39,11 +25,22 @@ import { propertiesApi } from "@/lib/api/properties"
 import type { Property } from "@/types/property"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
+import { motion, AnimatePresence } from "framer-motion"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useTheme } from "next-themes"
+import { useInView } from "react-intersection-observer"
+import confetti from "canvas-confetti"
 
 export function BuyerDashboard() {
   const router = useRouter()
   const { user, refreshUser, isAuthenticated } = useAuth()
+  const { setTheme, theme } = useTheme()
   const { toast } = useToast()
+
   const [savedProperties, setSavedProperties] = useState<Property[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -54,74 +51,145 @@ export function BuyerDashboard() {
   const [submittedDocumentUrl, setSubmittedDocumentUrl] = useState<string>("")
   const [submittedFileName, setSubmittedFileName] = useState<string>("")
   const [isLoadingWishlist, setIsLoadingWishlist] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<"price" | "date" | "status">("date")
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [quickViewProperty, setQuickViewProperty] = useState<Property | null>(null)
+  const [isPulling, setIsPulling] = useState(false)
+  const pullRef = useRef<HTMLDivElement>(null)
 
-  // Only include fields that exist in your backend - CORRECTED
   const [personalInfo, setPersonalInfo] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone_number: "",
-    username: "",
-    role: "buyer", 
+    first_name: "", last_name: "", email: "", phone_number: "", username: "", role: "buyer"
   })
+
+  const { ref: loadMoreRef, inView } = useInView()
+
+  // Pull-to-refresh
+  useEffect(() => {
+    let startY = 0
+    const touchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0) startY = e.touches[0].clientY
+    }
+    const touchMove = (e: TouchEvent) => {
+      if (!startY || window.scrollY > 0) return
+      const diff = e.touches[0].clientY - startY
+      if (diff > 0 && diff < 150) {
+        setIsPulling(true)
+        if (pullRef.current) pullRef.current.style.transform = `translateY(${diff}px)`
+      }
+    }
+    const touchEnd = () => {
+      if (isPulling) {
+        setIsPulling(false)
+        if (pullRef.current) pullRef.current.style.transform = ''
+        if (window.scrollY === 0) handleRefresh()
+      }
+      startY = 0
+    }
+    window.addEventListener('touchstart', touchStart)
+    window.addEventListener('touchmove', touchMove)
+    window.addEventListener('touchend', touchEnd)
+    return () => {
+      window.removeEventListener('touchstart', touchStart)
+      window.removeEventListener('touchmove', touchMove)
+      window.removeEventListener('touchend', touchEnd)
+    }
+  }, [isPulling])
+
+  useEffect(() => {
+    if (inView && hasMore && !isLoadingWishlist) {
+      loadWishlist(page + 1)
+    }
+  }, [inView, page, hasMore])
+
+  const handleRefresh = useCallback(() => {
+    setPage(1)
+    setSavedProperties([])
+    loadProfile()
+    loadWishlist(1)
+    toast({ title: "Refreshing...", description: "Updating your data" })
+  }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
       loadProfile()
-      loadWishlist()
+      loadWishlist(1)
     } else {
       setIsLoading(false)
     }
   }, [isAuthenticated])
 
-  // Add function to load wishlist
-  const loadWishlist = async () => {
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        document.querySelector('a[href="/properties"]')?.click()
+      }
+      if (e.key === "r" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        handleRefresh()
+      }
+      if (e.key === "d" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setTheme(theme === "dark" ? "light" : "dark")
+      }
+    }
+    document.addEventListener("keydown", down)
+    return () => document.removeEventListener("keydown", down)
+  }, [handleRefresh, theme, setTheme])
+
+  const loadWishlist = async (pageNum: number = 1) => {
+    if (pageNum === 1) setIsLoadingWishlist(true)
     try {
-      setIsLoadingWishlist(true)
-      const wishlist = await propertiesApi.getWishlist()
-      setSavedProperties(wishlist)
+      const wishlist = await propertiesApi.getWishlist(pageNum)
+      if (pageNum === 1) {
+        setSavedProperties(wishlist)
+      } else {
+        setSavedProperties(prev => [...prev, ...wishlist])
+      }
+      setHasMore(wishlist.length === 12)
+      setPage(pageNum)
     } catch (error) {
       console.error("[v0] Failed to load wishlist:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load saved properties",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to load", variant: "destructive" })
     } finally {
-      setIsLoadingWishlist(false)
+      if (pageNum === 1) setIsLoadingWishlist(false)
     }
   }
 
-  // Add function to remove from wishlist
   const handleRemoveFromWishlist = async (propertyId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
+    const property = savedProperties.find(p => p.id === propertyId)
+    setSavedProperties(prev => prev.filter(p => p.id !== propertyId))
+
+    const { dismiss } = toast({
+      title: "Removed",
+      description: "Property removed from wishlist",
+      action: (
+        <Button size="sm" variant="outline" onClick={() => {
+          if (property) setSavedProperties(prev => [...prev, property])
+          dismiss()
+        }}>
+          <Undo2 className="h-3 w-3 mr-1" /> Undo
+        </Button>
+      ),
+    })
+
     try {
       await propertiesApi.toggleWishlist(propertyId)
-      toast({
-        title: "Removed from favorites",
-        description: "Property removed from your wishlist",
-      })
-      // Refresh the wishlist
-      await loadWishlist()
     } catch (error) {
-      console.error("[v0] Failed to remove from wishlist:", error)
-      toast({
-        title: "Error",
-        description: "Failed to remove from favorites",
-        variant: "destructive",
-      })
+      if (property) setSavedProperties(prev => [...prev, property])
+      toast({ title: "Error", description: "Failed to remove", variant: "destructive" })
     }
   }
 
-  // Update your loadProfile function
   const loadProfile = async () => {
     try {
       setIsLoading(true)
       const data = await usersApi.getProfile()
       setProfile(data)
-      
       setPersonalInfo({
         first_name: data.first_name || "",
         last_name: data.last_name || "",
@@ -130,19 +198,17 @@ export function BuyerDashboard() {
         username: data.username || "",
         role: data.role || "buyer",
       })
-      
-      // Load verification status for BOTH buyers and sellers
+
       if (data.role === 'buyer' || data.role === 'seller') {
         try {
           const verificationData = await usersApi.getVerificationStatus()
-          setVerificationStatus(verificationData.status || "none")
-          
-          // Get the document info from backend
-          if (verificationData.document_name) {
-            setSubmittedFileName(verificationData.document_name)
-          }
-          if (verificationData.document_url) {
-            setSubmittedDocumentUrl(verificationData.document_url)
+          const newStatus = verificationData.status || "none"
+          setVerificationStatus(newStatus)
+          if (verificationData.document_name) setSubmittedFileName(verificationData.document_name)
+          if (verificationData.document_url) setSubmittedDocumentUrl(verificationData.document_url)
+
+          if (newStatus === "approved" && verificationStatus !== "approved") {
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
           }
         } catch (error) {
           console.error("[v0] Failed to load verification status:", error)
@@ -152,18 +218,10 @@ export function BuyerDashboard() {
     } catch (error: any) {
       console.error("[v0] Failed to load profile:", error)
       if (error.message === 'Not authenticated') {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to access your profile",
-          variant: "destructive",
-        })
+        toast({ title: "Login Required", description: "Please log in", variant: "destructive" })
         router.push('/login')
       } else {
-        toast({
-          title: "Error",
-          description: "Failed to load profile data",
-          variant: "destructive",
-        })
+        toast({ title: "Error", description: "Failed to load profile", variant: "destructive" })
       }
     } finally {
       setIsLoading(false)
@@ -172,43 +230,24 @@ export function BuyerDashboard() {
 
   const handleViewDocument = () => {
     if (submittedDocumentUrl) {
-      // Open the PDF in a new tab
-      window.open(submittedDocumentUrl, '_blank', 'noopener,noreferrer');
+      window.open(submittedDocumentUrl, '_blank', 'noopener,noreferrer')
     } else {
-      toast({
-        title: "Document unavailable",
-        description: "The document is not available for viewing at the moment.",
-        variant: "destructive",
-      });
+      toast({ title: "Unavailable", description: "Document not ready", variant: "destructive" })
     }
-  };
+  }
 
   const handleSaveProfile = async () => {
     try {
       setIsSaving(true)
-      // Send only the fields that exist in your backend
       await usersApi.updateProfile(personalInfo)
-      await refreshUser() // This will refresh the user role if changed to seller
-      toast({
-        title: "Success",
-        description: "Profile updated successfully",
-      })
+      await refreshUser()
+      toast({ title: "Saved!", description: "Profile updated" })
     } catch (error: any) {
-      console.error("[v0] Failed to update profile:", error)
-      if (error.message === 'Not authenticated') {
-        toast({
-          title: "Session Expired",
-          description: "Please log in again",
-          variant: "destructive",
-        })
-        router.push('/login')
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update profile. Please try again.",
-          variant: "destructive",
-        })
-      }
+      toast({
+        title: error.message === 'Not authenticated' ? "Session Expired" : "Error",
+        description: error.message === 'Not authenticated' ? "Please log in" : "Failed to save",
+        variant: "destructive",
+      })
     } finally {
       setIsSaving(false)
     }
@@ -216,407 +255,372 @@ export function BuyerDashboard() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== "application/pdf") {
+      toast({ title: "Invalid", description: "PDF only", variant: "destructive" })
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "Too large", description: "Max 10MB", variant: "destructive" })
+      return
+    }
+    setVerificationFile(file)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
     if (file) {
-      if (file.type !== "application/pdf") {
-        toast({
-          title: "Invalid file type",
-          description: "Please upload a PDF document",
-          variant: "destructive",
-        })
-        return
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: "Please upload a file smaller than 10MB",
-          variant: "destructive",
-        })
-        return
-      }
-      setVerificationFile(file)
+      const fakeEvent = { target: { files: [file] } } as any
+      handleFileChange(fakeEvent)
     }
   }
 
   const handleSubmitVerification = async () => {
     if (!verificationFile) {
-      toast({
-        title: "No file selected",
-        description: "Please select a PDF document to upload",
-        variant: "destructive",
-      })
+      toast({ title: "No file", description: "Select a PDF", variant: "destructive" })
       return
     }
-
     try {
       setIsSubmittingVerification(true)
       await usersApi.submitVerification(verificationFile)
       setVerificationStatus("pending")
-      setSubmittedFileName(verificationFile.name) // Store the filename here
+      setSubmittedFileName(verificationFile.name)
       setVerificationFile(null)
-      toast({
-        title: "Verification submitted",
-        description: "Your verification request has been submitted for review",
-      })
+      toast({ title: "Submitted", description: "Under review" })
     } catch (error: any) {
-      console.error("[v0] Failed to submit verification:", error)
-      if (error.message === 'Not authenticated') {
-        toast({
-          title: "Session Expired",
-          description: "Please log in again",
-          variant: "destructive",
-        })
-        router.push('/login')
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to submit verification. Please try again.",
-          variant: "destructive",
-        })
-      }
+      toast({
+        title: error.message === 'Not authenticated' ? "Session Expired" : "Error",
+        description: "Failed to submit",
+        variant: "destructive",
+      })
     } finally {
       setIsSubmittingVerification(false)
     }
   }
 
-  // Helper functions for formatting
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      maximumFractionDigits: 0,
-    }).format(price)
+  const handleDeleteVerification = async () => {
+    if (!window.confirm("Are you sure you want to delete the submitted document? This cannot be undone.")) return
+
+    try {
+      await usersApi.deleteVerification()
+      setVerificationStatus("none")
+      setSubmittedFileName("")
+      setSubmittedDocumentUrl("")
+      setVerificationFile(null)
+      toast({ title: "Deleted", description: "Verification document removed" })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete document",
+        variant: "destructive",
+      })
+    }
   }
 
-  const formatSquareMeters = (sqm: number) => {
-    return new Intl.NumberFormat('de-DE').format(sqm)
-  }
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(price)
+  const formatSquareMeters = (sqm: number) => new Intl.NumberFormat('de-DE').format(sqm)
 
-  // Refresh verification status periodically for pending requests
   useEffect(() => {
     if (verificationStatus === "pending" && user?.role === "buyer") {
-      const interval = setInterval(() => {
-        loadProfile() // This will refresh the verification status and user role
-      }, 30000) // Check every 30 seconds
-
+      const interval = setInterval(loadProfile, 30000)
       return () => clearInterval(interval)
     }
   }, [verificationStatus, user?.role])
 
+  const filteredSaved = useMemo(() => {
+    let filtered = savedProperties.filter(p =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.city.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    return filtered.sort((a, b) => {
+      if (sortBy === "price") return b.price - a.price
+      if (sortBy === "date") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      if (sortBy === "status") return a.status.localeCompare(b.status)
+      return 0
+    })
+  }, [savedProperties, searchQuery, sortBy])
+
   if (!isAuthenticated) {
     return (
-      <div className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-[400px]">
-        <AlertCircle className="h-16 w-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
-        <p className="text-muted-foreground mb-6">Please log in to access your dashboard</p>
-        <Button asChild size="lg">
-          <Link href="/login">Sign In</Link>
-        </Button>
+      <div className="container mx-auto px-4 py-16 text-center">
+        <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Login Required</h2>
+        <p className="text-muted-foreground mb-6">Sign in to access your dashboard</p>
+        <Button asChild size="lg"><Link href="/login">Sign In</Link></Button>
       </div>
     )
   }
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="container mx-auto px-4 py-16">
+        <div className="flex justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
       </div>
     )
   }
 
-  // Get user's first name for welcome message
   const displayName = personalInfo.first_name || user?.first_name || user?.username || "User"
-  
-  // Get initials for avatar
-  const firstName = personalInfo.first_name || ""
-  const lastName = personalInfo.last_name || ""
-  const initials = firstName && lastName ? `${firstName[0]}${lastName[0]}`.toUpperCase() : 
-                  user?.username ? user.username[0].toUpperCase() : "U"
+  const initials = (personalInfo.first_name?.[0] || "") + (personalInfo.last_name?.[0] || "") || user?.username?.[0] || "U"
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Welcome back, {displayName}!</h1>
-        <p className="text-lg text-muted-foreground">Manage your saved properties and profile</p>
+    <>
+      <div ref={pullRef} className="fixed top-0 left-0 right-0 h-16 bg-primary/5 flex items-center justify-center pointer-events-none z-50 transition-transform">
+        {isPulling && <RefreshCw className="h-5 w-5 animate-spin text-primary" />}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Saved Properties</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Heart className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{savedProperties.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">In your wishlist</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Properties Viewed</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Eye className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground mt-1">Recently viewed</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Messages</CardTitle>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Mail className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">8</div>
-            <p className="text-xs text-muted-foreground mt-1">With sellers</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Tabs */}
-      <Tabs defaultValue="saved" className="space-y-6">
-        <TabsList className="bg-background border-2">
-          <TabsTrigger
-            value="saved"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
-            <Heart className="h-4 w-4 mr-2" />
-            Saved Properties
-          </TabsTrigger>
-          <TabsTrigger
-            value="profile"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
-            <User className="h-4 w-4 mr-2" />
-            Profile
-          </TabsTrigger>
-          <TabsTrigger
-            value="seller"
-            className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-          >
-            <Building2 className="h-4 w-4 mr-2" />
-            Become a Seller
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Saved Properties Tab */}
-        <TabsContent value="saved" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold">Saved Properties</h2>
-              <p className="text-muted-foreground text-lg">Properties you've marked as favorites</p>
-            </div>
-            <Button asChild size="lg" className="font-medium">
-              <Link href="/properties">Browse More</Link>
+      <div className="container mx-auto px-4 py-8 max-w-7xl pt-16">
+        {/* Header */}
+        <div className="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold">Welcome back, {displayName}!</h1>
+            <p className="text-muted-foreground mt-1">Your real estate journey starts here</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="icon" onClick={handleRefresh} aria-label="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button asChild size="lg" className="h-12 px-6 font-medium shadow-md">
+              <Link href="/properties">
+                <Search className="h-5 w-5 mr-2" />
+                Browse
+              </Link>
             </Button>
           </div>
+        </div>
 
-          {isLoadingWishlist ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : savedProperties.length === 0 ? (
-            <Card className="border-2 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                  <Heart className="h-10 w-10 text-primary" />
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+          {[
+            { title: "Saved", value: savedProperties.length, sub: "Wishlist", icon: Heart },
+            { title: "Viewed", value: 24, sub: "Recently", icon: Eye },
+            { title: "Messages", value: 8, sub: "Active", icon: Mail },
+          ].map((stat, i) => (
+            <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+              <Card className="border hover:border-primary/50 transition-all hover:shadow-md">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                    <stat.icon className="h-4 w-4 text-primary" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground">{stat.sub}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        <Tabs defaultValue="saved" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3 bg-card border">
+            <TabsTrigger value="saved"><Heart className="h-4 w-4 mr-2" />Saved</TabsTrigger>
+            <TabsTrigger value="profile"><User className="h-4 w-4 mr-2" />Profile</TabsTrigger>
+            <TabsTrigger value="seller"><Building2 className="h-4 w-4 mr-2" />Sell</TabsTrigger>
+          </TabsList>
+
+          {/* Saved Properties */}
+          <TabsContent value="saved" className="space-y-6">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Saved Properties</h2>
+                <p className="text-muted-foreground">Your curated collection</p>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-initial">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 h-10 w-full sm:w-64"
+                    aria-label="Search saved properties"
+                  />
                 </div>
-                <h3 className="text-2xl font-semibold mb-2">No saved properties yet</h3>
-                <p className="text-muted-foreground text-center mb-6 max-w-md leading-relaxed">
-                  Start browsing properties and save your favorites to see them here
-                </p>
-                <Button asChild size="lg" className="font-medium">
-                  <Link href="/properties">Browse Properties</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {savedProperties.map((property) => (
-                <Card key={property.id} className="overflow-hidden hover:shadow-lg transition-all border-2 hover:border-primary/50 cursor-pointer">
-                  <Link href={`/properties/${property.id}`} className="block">
-                    <div className="relative h-48 overflow-hidden">
-                      <Image
-                        src={property.images[0]?.url || "/placeholder.svg"}
-                        alt={property.name}
-                        fill
-                        className="object-cover hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute top-3 left-3">
-                        <Badge variant={property.status === "active" ? "default" : "secondary"} className="capitalize">
-                          {property.status}
-                        </Badge>
-                      </div>
-                      <div className="absolute top-3 right-3">
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="h-8 w-8 rounded-full bg-white/95 hover:bg-white shadow-lg"
-                          onClick={(e) => handleRemoveFromWishlist(property.id, e)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <CardContent className="p-4">
-                      <div className="mb-2">
-                        <p className="text-xl font-bold text-primary">{formatPrice(property.price)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Math.round(property.price / property.squareMeters).toLocaleString('de-DE')} €/m²
-                        </p>
-                      </div>
-                      <h3 className="font-semibold text-lg mb-2 line-clamp-1">{property.name}</h3>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
-                        <MapPin className="h-3 w-3 flex-shrink-0" />
-                        <span className="line-clamp-1">{property.city}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Bed className="h-3 w-3 text-muted-foreground" />
-                          <span>{property.bedrooms}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Square className="h-3 w-3 text-muted-foreground" />
-                          <span>{formatSquareMeters(property.squareMeters)} m²</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Link>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">Latest</SelectItem>
+                    <SelectItem value="price">Price</SelectItem>
+                    <SelectItem value="status">Status</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {isLoadingWishlist && page === 1 ? (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {[...Array(6)].map((_, i) => (
+                    <Card key={i}>
+                      <Skeleton className="h-48 w-full" />
+                      <CardContent className="p-4 space-y-2">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-6 w-40" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : filteredSaved.length === 0 ? (
+                <Card className="border-dashed text-center py-16">
+                  <CardContent>
+                    <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No saved properties</h3>
+                    <p className="text-muted-foreground mb-6">Start exploring!</p>
+                    <Button asChild><Link href="/properties">Browse</Link></Button>
+                  </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Profile Tab */}
-        <TabsContent value="profile" className="space-y-6">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Profile Settings</h2>
-            <p className="text-muted-foreground text-lg">Manage your personal information and account settings</p>
-          </div>
-
-          <Card className="border-2">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-6">
-                {/* Avatar Section */}
-                <div className="flex-shrink-0">
-                  <div className="relative group">
-                    <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                      <AvatarImage src="/placeholder.svg" alt={displayName} />
-                      <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">{initials}</AvatarFallback>
-                    </Avatar>
-                    <button className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Camera className="h-6 w-6 text-white" />
-                    </button>
-                  </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredSaved.map((property) => (
+                    <motion.div
+                      key={property.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      whileHover={{ y: -4 }}
+                      className="group"
+                    >
+                      <Card
+                        className="overflow-hidden border hover:border-primary/50 transition-all cursor-pointer"
+                        onClick={() => setQuickViewProperty(property)}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`View ${property.name}`}
+                      >
+                        <div className="relative h-48 bg-muted">
+                          <Image
+                            src={property.images[0]?.url || "/placeholder.svg"}
+                            alt={property.name}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <Badge className="absolute top-3 left-3 text-xs capitalize">
+                            {property.status}
+                          </Badge>
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            className="absolute top-3 right-3 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => handleRemoveFromWishlist(property.id, e)}
+                            aria-label="Remove from wishlist"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
+                        <CardContent className="p-4">
+                          <p className="font-bold text-primary">{formatPrice(property.price)}</p>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            {Math.round(property.price / property.squareMeters).toLocaleString()} €/m²
+                          </p>
+                          <h3 className="font-medium line-clamp-1 mb-2">{property.name}</h3>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1 mb-2">
+                            <MapPin className="h-3 w-3" />{property.city}
+                          </p>
+                          <div className="flex gap-3 text-sm">
+                            <span className="flex items-center gap-1"><Bed className="h-3 w-3" />{property.bedrooms}</span>
+                            <span className="flex items-center gap-1"><Square className="h-3 w-3" />{formatSquareMeters(property.squareMeters)} m²</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                  {hasMore && (
+                    <div ref={loadMoreRef} className="col-span-full flex justify-center py-4">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  )}
                 </div>
+              )}
+            </AnimatePresence>
+          </TabsContent>
 
-                {/* Profile Info - Only show existing fields */}
-                <div className="flex-1 grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm">
-                      Username
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="username"
-                        disabled
-                        value={personalInfo.username}
-                        className="pl-9 h-9"
-                      />
+          {/* Profile Tab */}
+          <TabsContent value="profile" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-1">Profile Settings</h2>
+              <p className="text-muted-foreground">Update your personal information</p>
+            </div>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col sm:flex-row gap-6">
+                  <div className="flex-shrink-0">
+                    <div className="relative group">
+                      <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                        <AvatarImage src="/placeholder.svg" alt={displayName} />
+                        <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                          {initials.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <button className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                        <Camera className="h-6 w-6 text-white" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role" className="text-sm">
-                      Role
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="role"
-                        value={personalInfo.role || user?.role || "buyer"}
-                        disabled
-                        className="pl-9 h-9"
-                      />
+                  <div className="flex-1 space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Username</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.username} disabled className="pl-9 h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Role</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.role || user?.role || "buyer"} disabled className="pl-9 h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>First Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={personalInfo.first_name}
+                            onChange={(e) => setPersonalInfo({ ...personalInfo, first_name: e.target.value })}
+                            className="pl-9 h-10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Last Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={personalInfo.last_name}
+                            onChange={(e) => setPersonalInfo({ ...personalInfo, last_name: e.target.value })}
+                            className="pl-9 h-10"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.email} disabled className="pl-9 h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Phone</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={personalInfo.phone_number}
+                            onChange={(e) => setPersonalInfo({ ...personalInfo, phone_number: e.target.value })}
+                            className="pl-9 h-10"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="first_name" className="text-sm">
-                      First Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="first_name"
-                        value={personalInfo.first_name}
-                        onChange={(e) => setPersonalInfo({ ...personalInfo, first_name: e.target.value })}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="last_name" className="text-sm">
-                      Last Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="last_name"
-                        value={personalInfo.last_name}
-                        onChange={(e) => setPersonalInfo({ ...personalInfo, last_name: e.target.value })}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm">
-                      Email
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        disabled
-                        value={personalInfo.email}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone_number" className="text-sm">
-                      Phone
-                    </Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="phone_number"
-                        type="tel"
-                        value={personalInfo.phone_number}
-                        onChange={(e) => setPersonalInfo({ ...personalInfo, phone_number: e.target.value })}
-                        className="pl-9 h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-end md:col-span-2">
-                    <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full">
+                    <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full sm:w-auto">
                       {isSaving ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -628,144 +632,202 @@ export function BuyerDashboard() {
                     </Button>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Become a Seller Tab */}
-        <TabsContent value="seller" className="space-y-6">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Become a Seller</h2>
-            <p className="text-muted-foreground text-lg">Start selling properties by verifying your account</p>
-          </div>
+          {/* Become Seller Tab */}
+          <TabsContent value="seller" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-1">Become a Seller</h2>
+              <p className="text-muted-foreground">Verify your account to start listing properties</p>
+            </div>
 
-          {user?.role === "buyer" && (
-            <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-6">
-                  <div className="flex-shrink-0">
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Building2 className="h-8 w-8 text-primary" />
+            {user?.role === "buyer" && (
+              <Card className="border-primary/20 bg-gradient-to-r from-primary/5">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    <div className="flex-shrink-0">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Building2 className="h-8 w-8 text-primary" />
+                      </div>
                     </div>
-                  </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold mb-1">Get Verified</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Upload a PDF document to become a verified seller.
+                      </p>
 
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-1">Become a Verified Seller</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Want to sell properties? Upload your verification document and become a verified seller.
-                    </p>
-
-                    {verificationStatus === "none" && (
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1">
+                      {verificationStatus === "none" && (
+                        <div
+                          className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                          onDrop={handleDrop}
+                          onDragOver={(e) => e.preventDefault()}
+                        >
                           <Input
                             id="verification-doc"
                             type="file"
                             accept=".pdf"
                             onChange={handleFileChange}
-                            className="cursor-pointer"
+                            className="hidden"
                           />
+                          <label htmlFor="verification-doc" className="cursor-pointer">
+                            <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-sm font-medium">Click to upload or drag & drop</p>
+                            <p className="text-xs text-muted-foreground">PDF up to 10MB</p>
+                          </label>
                           {verificationFile && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                              <FileText className="h-4 w-4" />
-                              <span className="truncate">{verificationFile.name}</span>
+                            <div className="mt-4 p-3 bg-muted rounded-lg flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm">
+                                <FileText className="h-4 w-4" />
+                                <span className="truncate max-w-48">{verificationFile.name}</span>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setVerificationFile(null)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
                           )}
+                          <Button
+                            onClick={handleSubmitVerification}
+                            disabled={!verificationFile || isSubmittingVerification}
+                            className="mt-4 w-full"
+                            size="lg"
+                          >
+                            {isSubmittingVerification ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Submitting...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="mr-2 h-4 w-4" />
+                                Submit for Review
+                              </>
+                            )}
+                          </Button>
                         </div>
-                        <Button
-                          onClick={handleSubmitVerification}
-                          disabled={!verificationFile || isSubmittingVerification}
-                          size="lg"
-                        >
-                          {isSubmittingVerification ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Submitting...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="mr-2 h-4 w-4" />
-                              Submit for Verification
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    )}
+                      )}
 
-                    {verificationStatus === "pending" && (
-                      <Alert className="mt-6 border-gray-700 bg-gray-900">
-                        <AlertCircle className="h-4 w-4 text-blue-400" />
-                        <AlertDescription className="space-y-1">
-                          <p className="text-gray-300 text-sm">Your verification request is pending review. We'll notify you via email once it's been processed.</p>
-                          
-                          {submittedFileName && (
-                            <div 
-                              className="flex items-center gap-2 p-2 bg-gray-800 rounded border border-gray-600 mt-1 cursor-pointer hover:bg-gray-700 transition-colors"
-                              onClick={handleViewDocument}
-                            >
-                              <FileText className="h-3 w-3 text-blue-400" />
-                              
-                              <Button variant="ghost" size="sm" className="h-6 text-blue-400 hover:text-blue-300 hover:bg-gray-600 text-xs">
-                                View File 
-                              </Button>
-                            </div>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                      {verificationStatus === "pending" && (
+                        <Alert className="bg-blue-50 border-blue-200">
+                          <AlertCircle className="h-4 w-4 text-blue-600" />
+                          <AlertDescription>
+                            <p className="font-medium text-blue-900">Under Review</p>
+                            <p className="text-sm text-blue-700">We'll email you once processed.</p>
+                            {submittedFileName && (
+                              <div className="mt-2 flex items-center gap-3 text-sm">
+                                <button
+                                  onClick={handleViewDocument}
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  View Document
+                                </button>
+                                <button
+                                  onClick={handleDeleteVerification}
+                                  className="inline-flex items-center gap-1 text-red-600 hover:underline"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-                    {verificationStatus === "approved" && (
-                      <Alert className="border-gray-700 bg-gray-900 mt-6">
-                        <CheckCircle2 className="h-4 w-4 text-green-400" />
-                        <AlertDescription className="space-y-1">
-                          <p className="text-sm text-gray-300">Congratulations! You're now a verified seller. You can start listing properties.</p>
-                          {submittedFileName && (
-                            <div 
-                              className="flex items-center gap-2 p-2 bg-gray-800 rounded border border-gray-600 mt-1 cursor-pointer hover:bg-gray-700 transition-colors"
-                              onClick={handleViewDocument}
-                            >
-                              <FileText className="h-3 w-3 text-green-400" />
-                          
-                              <Button variant="ghost" size="sm" className="h-6 text-green-400 hover:text-green-300 hover:bg-gray-600 text-xs">
-                                View File 
-                              </Button>
-                            </div>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                      {verificationStatus === "approved" && (
+                        <Alert className="bg-green-50 border-green-200">
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <AlertDescription>
+                            <p className="font-medium text-green-900">Verified Seller!</p>
+                            <p className="text-sm text-green-700">You can now list properties.</p>
+                            {submittedFileName && (
+                              <div className="mt-2 flex items-center gap-3 text-sm">
+                                <button
+                                  onClick={handleViewDocument}
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  View Document
+                                </button>
+                                <button
+                                  onClick={handleDeleteVerification}
+                                  className="inline-flex items-center gap-1 text-red-600 hover:underline"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                            <Button asChild className="mt-3">
+                              <Link href="/dashboard/properties/new">List Property</Link>
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-                    {verificationStatus === "rejected" && (
-                      <Alert className="border-gray-700 bg-gray-900 mt-6">
-                        <AlertCircle className="h-4 w-4 text-red-400" />
-                        <AlertDescription className="space-y-1">
-                          <p className="text-sm text-gray-300">Your verification request was rejected. Please contact support for more information.</p>
-                          {submittedFileName && (
-                            <div 
-                              className="flex items-center gap-2 p-2 bg-gray-800 rounded border border-gray-600 mt-1 cursor-pointer hover:bg-gray-700 transition-colors"
-                              onClick={handleViewDocument}
-                            >
-                              <FileText className="h-3 w-3 text-red-400" />
-                              
-                              <Button variant="ghost" size="sm" className="h-6 text-red-400 hover:text-red-300 hover:bg-gray-600 text-xs">
-                                View File 
-                              </Button>
-                            </div>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                      {verificationStatus === "rejected" && (
+                        <Alert className="bg-red-50 border-red-200">
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                          <AlertDescription>
+                            <p className="font-medium text-red-900">Verification Rejected</p>
+                            <p className="text-sm text-red-700">Contact support for details.</p>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
 
-      {/* Chatbot Component */}
-      <Chatbot className="mt-6" />
-    </div>
+        {/* Quick View Modal */}
+        <Dialog open={!!quickViewProperty} onOpenChange={() => setQuickViewProperty(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{quickViewProperty?.name}</DialogTitle>
+            </DialogHeader>
+            {quickViewProperty && (
+              <div className="space-y-4">
+                <div className="relative h-64 rounded-lg overflow-hidden">
+                  <Image
+                    src={quickViewProperty.images[0]?.url || "/placeholder.svg"}
+                    alt={quickViewProperty.name}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><strong>Price:</strong> {formatPrice(quickViewProperty.price)}</div>
+                  <div><strong>Size:</strong> {formatSquareMeters(quickViewProperty.squareMeters)} m²</div>
+                  <div><strong>Rooms:</strong> {quickViewProperty.bedrooms}</div>
+                  <div><strong>Location:</strong> {quickViewProperty.city}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button asChild className="flex-1">
+                    <Link href={`/properties/${quickViewProperty.id}`}>View Details</Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={(e) => handleRemoveFromWishlist(quickViewProperty.id, e)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> Remove
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Chatbot className="mt-8" />
+      </div>
+    </>
   )
 }

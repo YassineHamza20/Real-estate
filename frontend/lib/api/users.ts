@@ -155,4 +155,37 @@ async submitVerification(file: File): Promise<any> {
     
     return response.json()
   },
+  
+
+  async deleteVerification(): Promise<any> {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/users/submit-verification/`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Failed to delete verification document';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || errorData.detail || errorMessage;
+    } catch (e) {
+      // Ignore JSON parse errors
+    }
+    throw new Error(errorMessage);
+  }
+
+  // Optional: return response data if backend sends a message
+  try {
+    return await response.json();
+  } catch {
+    return { message: 'Document deleted' };
+  }
+},
 }

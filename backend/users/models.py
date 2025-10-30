@@ -28,7 +28,7 @@ class SellerVerification(models.Model):
         REJECTED = 'rejected', 'Rejected'
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='seller_verification')
-    document = models.FileField(upload_to='verification_docs/')  # Store PDF file
+    document = models.FileField(upload_to='verification_docs/', null=True, blank=True)  # Store PDF file
     status = models.CharField(max_length=20, choices=VerificationStatus.choices, default=VerificationStatus.PENDING)
     submitted_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)

@@ -1,5 +1,5 @@
 "use client"
-
+import { AutoLogout } from "@/components/auto-logout"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"

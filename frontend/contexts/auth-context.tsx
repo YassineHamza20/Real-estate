@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode, useRef } from "react"
 import type { User } from "@/types/auth"
 import { authApi } from "@/lib/api/auth"
 
@@ -19,6 +19,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Auto logout after 3 minutes of inactivity
+  const INACTIVITY_TIMEOUT = 3 * 60 * 1000 // 30 minutes
+
+  // Reset inactivity timer
+  const resetInactivityTimer = () => {
+    // Clear existing timer
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current)
+    }
+
+    // Set new timer only if user is authenticated
+    if (user) {
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log('Auto logout due to inactivity')
+        logout()
+      }, INACTIVITY_TIMEOUT)
+    }
+  }
 
   const checkTokenExpiration = () => {
     const token = localStorage.getItem("access_token")
@@ -40,6 +60,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false
     }
   }
+
+  const logout = async () => {
+    try {
+      await authApi.logout()
+    } catch (error) {
+      console.error("[v0] Error during logout:", error)
+    } finally {
+      // Clear inactivity timer
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current)
+        inactivityTimerRef.current = null
+      }
+      
+      // Clear storage
+      localStorage.removeItem("access_token")
+      localStorage.removeItem("refresh_token")
+      localStorage.removeItem("user")
+      setUser(null)
+    }
+  }
+
+  // Setup activity listeners
+  useEffect(() => {
+    if (user) {
+      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
+      
+      const handleActivity = () => {
+        resetInactivityTimer()
+      }
+
+      events.forEach(event => {
+        document.addEventListener(event, handleActivity)
+      })
+
+      // Initial timer setup
+      resetInactivityTimer()
+
+      return () => {
+        events.forEach(event => {
+          document.removeEventListener(event, handleActivity)
+        })
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current)
+        }
+      }
+    }
+  }, [user]) // Only depend on user
 
   useEffect(() => {
     // Check for existing session on mount
@@ -68,26 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: password 
     })
     
-    // Store tokens with consistent keys (access_token instead of auth_token)
     localStorage.setItem('access_token', response.access)
     localStorage.setItem('refresh_token', response.refresh)
     
-    // Set user data exactly as returned from Django
     setUser(response.user)
-  }
-
-  const logout = async () => {
-    try {
-      await authApi.logout()
-    } catch (error) {
-      console.error("[v0] Error during logout:", error)
-    } finally {
-      // Always clear local storage and state
-      localStorage.removeItem("access_token")
-      localStorage.removeItem("refresh_token")
-      localStorage.removeItem("user")
-      setUser(null)
-    }
+    resetInactivityTimer() // Start timer after login
   }
 
   const refreshUser = async () => {
@@ -97,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const currentUser = await authApi.getCurrentUser()
       setUser(currentUser)
+      resetInactivityTimer() // Reset timer on user refresh
     } catch (error) {
       console.error("[v0] Failed to refresh user:", error)
       await logout()

@@ -32,7 +32,7 @@ export default function ConfirmEmailPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('')
   const [progress, setProgress] = useState(0)
-  const [countdown, setCountdown] = useState(60)
+  const [countdown, setCountdown] = useState(7)
   const [showConfetti, setShowConfetti] = useState(false)
 
   // Countdown → /dashboard

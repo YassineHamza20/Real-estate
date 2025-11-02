@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/auth-context"
 import { usersApi } from "@/lib/api/users"
 import type { UserProfile } from "@/types/user"
+import { AutoLogout } from "@/components/auto-logout"
 import {
   Home, Eye, DollarSign, MessageSquare, Plus, Pencil, Trash2,
   Loader2, User, Mail, Phone, Camera, Heart, MapPin, Bed, Square,
@@ -528,11 +529,18 @@ export function SellerDashboard() {
                           <Input value={personalInfo.username} disabled className="pl-9 h-10" />
                         </div>
                       </div>
-                      <div>
+                      {/* <div>
                         <Label>Role</Label>
                         <div className="relative">
                           <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                           <Input value="seller" disabled className="pl-9 h-10" />
+                        </div>
+                      </div> */}
+                      <div>
+                        <Label>Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.email} disabled className="pl-9 h-10" />
                         </div>
                       </div>
                       <div>
@@ -557,13 +565,7 @@ export function SellerDashboard() {
                           />
                         </div>
                       </div>
-                      <div>
-                        <Label>Email</Label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input value={personalInfo.email} disabled className="pl-9 h-10" />
-                        </div>
-                      </div>
+                      
                       <div>
                         <Label>Phone</Label>
                         <div className="relative">
@@ -611,6 +613,10 @@ export function SellerDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+       <div>
+    <AutoLogout />
+    {/* Your content */}
+  </div>
     </div>
   )
 }

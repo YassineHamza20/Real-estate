@@ -1,5 +1,5 @@
 "use client"
-
+import { AutoLogout } from "@/components/auto-logout"
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -414,7 +414,7 @@ export default function EditPropertyPage() {
               <Link href="/dashboard">Cancel</Link>
             </Button>
           </div>
-        </div>
+        </div><AutoLogout />
       </form>
     </div>
   )

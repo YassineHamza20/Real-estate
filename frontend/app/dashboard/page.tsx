@@ -7,6 +7,7 @@ import { BuyerDashboard } from "@/components/dashboards/buyer-dashboard"
 import { SellerDashboard } from "@/components/dashboards/seller-dashboard"
 import { AdminDashboard } from "@/components/dashboards/admin-dashboard"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AutoLogout } from "@/components/auto-logout"
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth()
@@ -41,6 +42,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
+      <AutoLogout />
       {user.role === "buyer" && <BuyerDashboard />}
       {user.role === "seller" && <SellerDashboard />}
       {user.role === "admin" && <AdminDashboard />}

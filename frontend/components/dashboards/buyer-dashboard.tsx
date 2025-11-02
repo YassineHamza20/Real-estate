@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/auth-context"
 import { usersApi } from "@/lib/api/users"
 import type { UserProfile } from "@/types/user"
+import { AutoLogout } from "@/components/auto-logout"
 import {
   Heart, User, Mail, Phone, Building2, Loader2, Camera, Upload,
   FileText, AlertCircle, CheckCircle2, Eye, MapPin, Bed, Square,
@@ -572,14 +573,22 @@ export function BuyerDashboard() {
                           <Input value={personalInfo.username} disabled className="pl-9 h-10" />
                         </div>
                       </div>
-                      <div>
+                      {/* <div>
                         <Label>Role</Label>
                         <div className="relative">
                           <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                           <Input value={personalInfo.role || user?.role || "buyer"} disabled className="pl-9 h-10" />
                         </div>
+                      </div> */}
+                      <div>
+                        <Label>Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input value={personalInfo.email} disabled className="pl-9 h-10" />
+                        </div>
                       </div>
                       <div>
+                        
                         <Label>First Name</Label>
                         <div className="relative">
                           <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -601,13 +610,7 @@ export function BuyerDashboard() {
                           />
                         </div>
                       </div>
-                      <div>
-                        <Label>Email</Label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input value={personalInfo.email} disabled className="pl-9 h-10" />
-                        </div>
-                      </div>
+                      
                       <div>
                         <Label>Phone</Label>
                         <div className="relative">
@@ -825,7 +828,10 @@ export function BuyerDashboard() {
             )}
           </DialogContent>
         </Dialog>
-
+ <div>
+    <AutoLogout />
+    {/* Your content */}
+  </div>
         <Chatbot className="mt-8" />
       </div>
     </>

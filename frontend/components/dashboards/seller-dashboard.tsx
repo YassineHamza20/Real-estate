@@ -9,18 +9,19 @@ import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/auth-context"
 import { usersApi } from "@/lib/api/users"
+ 
 import type { UserProfile } from "@/types/user"
 import { AutoLogout } from "@/components/auto-logout"
 import {
   Home, Eye, DollarSign, MessageSquare, Plus, Pencil, Trash2,
   Loader2, User, Mail, Phone, Camera, Heart, MapPin, Bed, Square,
-  Search, ArrowUpDown, RefreshCw
+  Search, ArrowUpDown, RefreshCw, X
 } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { propertiesApi } from "@/lib/api/properties"
 import type { Property } from "@/types/property"
-import { useToast } from "@/hooks/use-toast"
+
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -29,13 +30,14 @@ import {
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/hooks/use-toast"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select"
 
 export function SellerDashboard() {
   const { user, refreshUser } = useAuth()
-  const { toast } = useToast()
+  const { toast } = useToast() 
   const [myListings, setMyListings] = useState<Property[]>([])
   const [savedProperties, setSavedProperties] = useState<Property[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -52,6 +54,10 @@ export function SellerDashboard() {
   const [personalInfo, setPersonalInfo] = useState({
     first_name: "", last_name: "", email: "", phone_number: "", username: "", role: "seller"
   })
+  
+  // Profile picture states
+  const [profilePicture, setProfilePicture] = useState<File | null>(null);
+  const [profilePicturePreview, setProfilePicturePreview] = useState<string>("");
 
   // Refresh
   const handleRefresh = useCallback(() => {
@@ -81,6 +87,33 @@ export function SellerDashboard() {
     document.addEventListener("keydown", down)
     return () => document.removeEventListener("keydown", down)
   }, [handleRefresh])
+
+  // Profile picture handler
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Invalid file", description: "Please select an image file", variant: "destructive" });
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Please select an image smaller than 5MB", variant: "destructive" });
+      return;
+    }
+    
+    setProfilePicture(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setProfilePicturePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Wishlist
   const loadWishlist = async () => {
@@ -141,24 +174,43 @@ export function SellerDashboard() {
     }
   }
 
-  const handleSaveProfile = async () => {
-    try {
-      setIsSaving(true)
-      await usersApi.updateProfile(personalInfo)
-      await refreshUser()
-      toast({ title: "Saved!", description: "Profile updated successfully" })
-    } catch (error: any) {
-      toast({
-        title: error.message === 'Not authenticated' ? "Session Expired" : "Error",
-        description: error.message === 'Not authenticated'
-          ? "Please log in again"
-          : "Failed to save profile",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSaving(false)
-    }
+ 
+
+ const handleSaveProfile = async () => {
+  try {
+    setIsSaving(true);
+    
+    console.log('💾 Saving profile with personalInfo:', personalInfo);
+    console.log('📸 Profile picture:', profilePicture ? 'Yes' : 'No');
+    
+    const result = await usersApi.updateProfile(personalInfo, profilePicture || undefined);
+    console.log('✅ Profile update successful:', result);
+    
+    await refreshUser();
+    
+    setProfilePicture(null);
+    setProfilePicturePreview("");
+    
+    // SUCCESS - matching buyer dashboard style
+    toast({
+      title: "Saved!",
+      description: "🎉 Profile updated successfully",
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Error saving profile:', error);
+    
+    // ERROR - matching buyer dashboard style
+    toast({
+      title: "Error",
+      description: error.message || "Failed to save profile",
+      variant: "destructive",
+    });
+    
+  } finally {
+    setIsSaving(false);
   }
+};
 
   // Listings
   const loadMyProperties = async () => {
@@ -484,7 +536,7 @@ export function SellerDashboard() {
           )}
         </TabsContent>
 
-        {/* Profile */}
+        {/* Profile - UPDATED WITH PROFILE PICTURE */}
         <TabsContent value="profile" className="space-y-6">
           <div>
             <h2 className="text-2xl font-bold mb-1">Profile Settings</h2>
@@ -506,18 +558,58 @@ export function SellerDashboard() {
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-6">
+                  {/* Profile Picture Section */}
                   <div className="flex-shrink-0">
                     <div className="relative group">
-                      <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                        <AvatarImage src="/placeholder.svg" alt={displayName} />
+                      <Avatar className="h-24 w-24 border-4 border-background shadow-lg ring-2 ring-primary/20">
+                        <AvatarImage 
+                          src={profilePicturePreview || profile?.profile_picture_url || user?.profile_picture_url || "/placeholder.svg"} 
+                          alt={displayName}
+                          className="object-cover"
+                        />
                         <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
                           {initials.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <button className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                      
+                      {/* Hidden file input */}
+                      <input
+                        id="profile-picture-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProfilePictureChange}
+                        className="hidden"
+                      />
+                      
+                      {/* Upload button */}
+                      <label 
+                        htmlFor="profile-picture-upload"
+                        className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer hover:bg-black/60"
+                      >
                         <Camera className="h-6 w-6 text-white" />
-                      </button>
+                      </label>
                     </div>
+                    
+                    {/* Show file name when selected */}
+                    {profilePicture && (
+                      <div className="mt-2 text-center">
+                        <p className="text-xs text-muted-foreground truncate max-w-[100px] mx-auto">
+                          {profilePicture.name}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setProfilePicture(null);
+                            setProfilePicturePreview("");
+                          }}
+                          className="h-6 text-xs mt-1"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 space-y-4">
@@ -529,13 +621,6 @@ export function SellerDashboard() {
                           <Input value={personalInfo.username} disabled className="pl-9 h-10" />
                         </div>
                       </div>
-                      {/* <div>
-                        <Label>Role</Label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input value="seller" disabled className="pl-9 h-10" />
-                        </div>
-                      </div> */}
                       <div>
                         <Label>Email</Label>
                         <div className="relative">
@@ -613,10 +698,10 @@ export function SellerDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-       <div>
-    <AutoLogout />
-    {/* Your content */}
-  </div>
+      
+      <div>
+        <AutoLogout />
+      </div>
     </div>
   )
 }

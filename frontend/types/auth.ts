@@ -15,6 +15,8 @@ export interface User {
   last_name: string;
   date_joined: string;
   verification_status: string | null;
+  profile_picture?: string;
+  profile_picture_url?: string;
 }
 
 export interface LoginData {

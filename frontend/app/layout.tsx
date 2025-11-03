@@ -7,7 +7,7 @@ import { Navbar } from "@/components/navbar"
 import { GlobalChatbot } from "@/components/global-chatbot"
 import { ThemeProvider } from "next-themes"
 import { cn } from "@/lib/utils"
-
+import { Toaster } from "@/components/ui/toaster" // Import from shadcn
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -15,11 +15,11 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "RealEstate Pro - Find Your Dream Home",
+  title: "WohnTraume - Find Your Dream Home",
   description: "Professional real estate platform for buying, selling, and managing properties",
   generator: "v0.app",
   openGraph: {
-    title: "RealEstate Pro - Your Trusted Real Estate Platform",
+    title: "WohnTraume - Your Trusted Real Estate Platform",
     description: "Find dream homes, sell with confidence. Verified, secure, smart.",
     type: "website",
     images: ["/og-image.jpg"],
@@ -61,6 +61,7 @@ export default function RootLayout({
             <Navbar />
             {children}
             <GlobalChatbot />
+             <Toaster />
           </AuthProvider>
         </ThemeProvider>
       </body>

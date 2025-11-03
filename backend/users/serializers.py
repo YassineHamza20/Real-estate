@@ -1,4 +1,3 @@
-# users/serializers.py
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import User, SellerVerification
@@ -9,8 +8,6 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
-from django.urls import reverse
-
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -18,7 +15,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'password2', 'role', 'phone_number', 'first_name', 'last_name')
+        fields = ('username', 'email', 'password', 'password2', 'role', 'phone_number', 'first_name', 'last_name', 'profile_picture')
     
     def validate_username(self, value):
         if User.objects.filter(username=value).exists():
@@ -47,23 +44,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        """
-        Create user but set as inactive until email is confirmed
-        """
         validated_data.pop('password2')
         
         try:
-            # Create user but set as inactive and email not verified
             user = User.objects.create_user(**validated_data)
-            user.is_active = False  # User cannot login until email confirmed
+            user.is_active = False
             user.email_verified = False
             user.save()
             
-            # Generate email confirmation token
             token = default_token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             
-            # Send confirmation email
             self.send_confirmation_email(user, uid, token)
             
             return user
@@ -86,8 +77,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             })
     
     def send_confirmation_email(self, user, uid, token):
-        """Send email confirmation link to user"""
-        # Update this URL to match your frontend or backend URL
         confirmation_url = f"{settings.FRONTEND_URL}/confirm-email/{uid}/{token}/"
         
         subject = "Confirm Your Email Address"
@@ -146,13 +135,15 @@ class EmailConfirmationSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     verification_status = serializers.SerializerMethodField()
+    profile_picture_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'role', 'phone_number', 
                  'first_name', 'last_name', 'date_joined', 'verification_status', 
-                 'email_verified', 'is_active')
-        read_only_fields = ('role', 'username', 'email', 'email_verified', 'is_active')
+                 'email_verified', 'is_active', 'profile_picture', 'profile_picture_url')
+        # Remove 'email' from read_only_fields so it can be updated
+        read_only_fields = ('role', 'username', 'email_verified', 'is_active', 'date_joined')
     
     def get_verification_status(self, obj):
         if obj.role == User.Role.SELLER:
@@ -161,6 +152,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
             except SellerVerification.DoesNotExist:
                 return 'not_submitted'
         return None
+    
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
+
+
+
+
+
 
 # users/serializers.py
 class SellerVerificationSerializer(serializers.ModelSerializer):

@@ -171,7 +171,7 @@ export default function RegisterPage() {
               <Building2 className="h-12 w-12 text-primary" />
             </motion.div>
             <div>
-              <h1 className="text-5xl font-bold">RealEstate Pro</h1>
+              <h1 className="text-5xl font-bold">WohnTraume</h1>
               <p className="text-muted-foreground text-sm mt-1">Premium Property Platform</p>
             </div>
           </div>
@@ -181,7 +181,7 @@ export default function RegisterPage() {
               Start your <span className="text-primary">real estate journey</span> today
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              Join thousands of buyers who trust RealEstate Pro.
+              Join thousands of buyers who trust WohnTraume.
             </p>
           </div>
 
@@ -243,7 +243,7 @@ export default function RegisterPage() {
                 >
                   <Building2 className="h-8 w-8 text-primary" />
                 </motion.div>
-                <CardTitle className="text-3xl font-bold">RealEstate Pro</CardTitle>
+                <CardTitle className="text-3xl font-bold">WohnTraume</CardTitle>
               </div>
               <div className="space-y-3">
                 <CardTitle className="text-4xl font-bold">

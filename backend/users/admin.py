@@ -2,22 +2,79 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils import timezone
+from django.utils.html import format_html
 from .models import User, SellerVerification
 from .services import send_verification_email
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'role', 'phone_number', 'is_staff')
+    list_display = ('username', 'email', 'role', 'phone_number', 'is_staff', 'profile_picture_display')
     list_filter = ('role', 'is_staff', 'is_superuser')
+    
+    # Fields for viewing user
     fieldsets = UserAdmin.fieldsets + (
-        ('Additional Info', {'fields': ('role', 'phone_number', 'email_verified')}),
+        ('Additional Info', {'fields': ('role', 'phone_number', 'email_verified', 'profile_picture')}),
     )
+    
+    # Fields for adding user
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('Additional Info', {'fields': ('role', 'phone_number', 'profile_picture')}),
+    )
+    
+    def profile_picture_display(self, obj):
+        if obj.profile_picture:
+            return format_html(
+                '<img src="{}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" />',
+                obj.profile_picture.url
+            )
+        return format_html(
+            '<div style="width: 50px; height: 50px; border-radius: 50%; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #999; font-weight: bold;">No Image</div>'
+        )
+    
+    profile_picture_display.short_description = 'Profile Picture'
 
 class SellerVerificationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'status', 'submitted_at', 'reviewed_at')
+    list_display = ('user', 'status', 'submitted_at', 'reviewed_at', 'user_profile_picture')
     list_filter = ('status',)
     list_editable = ('status',)
-    readonly_fields = ('submitted_at',)
+    readonly_fields = ('submitted_at', 'user_profile_picture_display')
     actions = ['approve_verifications', 'reject_verifications']
+    
+    def user_profile_picture(self, obj):
+        if obj.user.profile_picture:
+            return format_html(
+                '<img src="{}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />',
+                obj.user.profile_picture.url
+            )
+        return "No Image"
+    
+    user_profile_picture.short_description = 'Profile Pic'
+    
+    def user_profile_picture_display(self, obj):
+        if obj.user.profile_picture:
+            return format_html(
+                '<img src="{}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid #ddd;" />',
+                obj.user.profile_picture.url
+            )
+        return format_html(
+            '<div style="width: 100px; height: 100px; border-radius: 50%; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #999; font-weight: bold; border: 2px solid #ddd;">No Image</div>'
+        )
+    
+    user_profile_picture_display.short_description = 'User Profile Picture'
+    
+    # Update fieldsets to include the profile picture in detail view
+    fieldsets = (
+        ('Verification Information', {
+            'fields': ('user', 'status', 'document', 'admin_notes')
+        }),
+        ('Timestamps', {
+            'fields': ('submitted_at', 'reviewed_at'),
+            'classes': ('collapse',)
+        }),
+        ('User Profile', {
+            'fields': ('user_profile_picture_display',),
+            'classes': ('wide',)
+        }),
+    )
     
     def approve_verifications(self, request, queryset):
         print("🟢 APPROVE ACTION TRIGGERED")

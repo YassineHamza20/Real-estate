@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Auto logout after 3 minutes of inactivity
-  const INACTIVITY_TIMEOUT = 3 * 60 * 1000 // 30 minutes
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000 // 30 minutes
 
   // Reset inactivity timer
   const resetInactivityTimer = () => {

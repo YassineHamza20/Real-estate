@@ -17,6 +17,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.tokens import default_token_generator  
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str   
+from rest_framework.parsers import MultiPartParser, FormParser
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -169,10 +170,16 @@ def resend_confirmation_email(request):
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  # Add this for file uploads
     
     def get_object(self):
         return self.request.user
-
+    
+    def get_serializer_context(self):
+        """Add request context to serializer for building absolute URLs"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 class SellerVerificationView(generics.CreateAPIView):
     serializer_class = SellerVerificationSerializer

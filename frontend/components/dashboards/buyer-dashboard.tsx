@@ -19,13 +19,14 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/hooks/use-toast"
+ 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Chatbot } from "@/components/chatbot"
 import { propertiesApi } from "@/lib/api/properties"
 import type { Property } from "@/types/property"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -40,7 +41,7 @@ export function BuyerDashboard() {
   const router = useRouter()
   const { user, refreshUser, isAuthenticated } = useAuth()
   const { setTheme, theme } = useTheme()
-  const { toast } = useToast()
+  const { toast } = useToast() 
 
   const [savedProperties, setSavedProperties] = useState<Property[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -59,6 +60,8 @@ export function BuyerDashboard() {
   const [quickViewProperty, setQuickViewProperty] = useState<Property | null>(null)
   const [isPulling, setIsPulling] = useState(false)
   const pullRef = useRef<HTMLDivElement>(null)
+  const [profilePicture, setProfilePicture] = useState<File | null>(null);
+  const [profilePicturePreview, setProfilePicturePreview] = useState<string>("");
 
   const [personalInfo, setPersonalInfo] = useState({
     first_name: "", last_name: "", email: "", phone_number: "", username: "", role: "buyer"
@@ -190,6 +193,7 @@ export function BuyerDashboard() {
     try {
       setIsLoading(true)
       const data = await usersApi.getProfile()
+      console.log('📡 Profile data from backend:', data)
       setProfile(data)
       setPersonalInfo({
         first_name: data.first_name || "",
@@ -236,23 +240,83 @@ export function BuyerDashboard() {
       toast({ title: "Unavailable", description: "Document not ready", variant: "destructive" })
     }
   }
+  
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Invalid file", description: "Please select an image file", variant: "destructive" });
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Please select an image smaller than 5MB", variant: "destructive" });
+      return;
+    }
+    
+    setProfilePicture(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setProfilePicturePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  }; 
+  
+
 
   const handleSaveProfile = async () => {
-    try {
-      setIsSaving(true)
-      await usersApi.updateProfile(personalInfo)
-      await refreshUser()
-      toast({ title: "Saved!", description: "Profile updated" })
-    } catch (error: any) {
-      toast({
-        title: error.message === 'Not authenticated' ? "Session Expired" : "Error",
-        description: error.message === 'Not authenticated' ? "Please log in" : "Failed to save",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSaving(false)
+  try {
+    setIsSaving(true);
+    
+    console.log('💾 Saving profile with personalInfo:', personalInfo);
+    console.log('📸 Profile picture:', profilePicture ? 'Yes' : 'No');
+    
+    const result = await usersApi.updateProfile(personalInfo, profilePicture || undefined);
+    console.log('✅ Profile update successful:', result);
+    
+    await refreshUser();
+    
+    setProfilePicture(null);
+    setProfilePicturePreview("");
+    
+    // SUCCESS - shadcn/ui toast (remove duplicate calls)
+    toast({
+      title: "🎉 Profile Updated Successfully!",
+      description: profilePicture 
+        ? "Your profile information and photo have been saved."
+        : "Your profile information has been saved.",
+    });
+    
+  } catch (error: any) {
+    console.error('❌ Error saving profile:', error);
+    
+    // ERROR - shadcn/ui toast (remove duplicate calls)
+    let errorMessage = "Failed to update profile. Please try again.";
+    
+    if (error.message.includes("email")) {
+      errorMessage = "Email is already in use. Please try a different email.";
+    } else if (error.message.includes("phone")) {
+      errorMessage = "Invalid phone number format. Please check and try again.";
+    } else if (error.message.includes("network") || error.message.includes("fetch")) {
+      errorMessage = "Network error. Please check your connection and try again.";
     }
+    
+    toast({
+      title: "⚠️ Update Failed",
+      description: error.message || errorMessage,
+      variant: "destructive",
+    });
+    
+  } finally {
+    setIsSaving(false);
   }
+};
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -542,7 +606,7 @@ export function BuyerDashboard() {
             </AnimatePresence>
           </TabsContent>
 
-          {/* Profile Tab */}
+          {/* Profile Tab - FIXED VERSION */}
           <TabsContent value="profile" className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold mb-1">Profile Settings</h2>
@@ -551,19 +615,70 @@ export function BuyerDashboard() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col sm:flex-row gap-6">
-                  <div className="flex-shrink-0">
-                    <div className="relative group">
-                      <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                        <AvatarImage src="/placeholder.svg" alt={displayName} />
-                        <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
-                          {initials.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <button className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                        <Camera className="h-6 w-6 text-white" />
-                      </button>
-                    </div>
-                  </div>
+                  {/* Profile Picture Section - FIXED */}
+
+
+
+             
+<div className="flex-shrink-0">
+  <div className="relative group">
+    <Avatar className="h-24 w-24 border-4 border-background shadow-lg ring-2 ring-primary/20">
+      <AvatarImage 
+        src={profilePicturePreview || profile?.profile_picture_url || user?.profile_picture_url || "/placeholder.svg"} 
+        alt={displayName}
+        className="object-cover" // This ensures proper cropping
+      />
+      <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+        {initials.toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+    
+    {/* Hidden file input */}
+    <input
+      id="profile-picture-upload"
+      type="file"
+      accept="image/*"
+      onChange={handleProfilePictureChange}
+      className="hidden"
+    />
+    
+    {/* Upload button */}
+    <label 
+      htmlFor="profile-picture-upload"
+      className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer hover:bg-black/60"
+    >
+      <Camera className="h-6 w-6 text-white" />
+    </label>
+  </div>
+  
+  {/* Show file name when selected */}
+  {profilePicture && (
+    <div className="mt-2 text-center">
+      <p className="text-xs text-muted-foreground truncate max-w-[100px] mx-auto">
+        {profilePicture.name}
+      </p>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setProfilePicture(null);
+          setProfilePicturePreview("");
+        }}
+        className="h-6 text-xs mt-1"
+      >
+        <X className="h-3 w-3 mr-1" />
+        Remove
+      </Button>
+    </div>
+  )}
+</div>
+
+
+
+
+
+
+
                   <div className="flex-1 space-y-4">
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
@@ -573,13 +688,6 @@ export function BuyerDashboard() {
                           <Input value={personalInfo.username} disabled className="pl-9 h-10" />
                         </div>
                       </div>
-                      {/* <div>
-                        <Label>Role</Label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                          <Input value={personalInfo.role || user?.role || "buyer"} disabled className="pl-9 h-10" />
-                        </div>
-                      </div> */}
                       <div>
                         <Label>Email</Label>
                         <div className="relative">
@@ -588,7 +696,6 @@ export function BuyerDashboard() {
                         </div>
                       </div>
                       <div>
-                        
                         <Label>First Name</Label>
                         <div className="relative">
                           <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -596,6 +703,7 @@ export function BuyerDashboard() {
                             value={personalInfo.first_name}
                             onChange={(e) => setPersonalInfo({ ...personalInfo, first_name: e.target.value })}
                             className="pl-9 h-10"
+                            placeholder={profile?.first_name || "First name"}
                           />
                         </div>
                       </div>
@@ -607,10 +715,10 @@ export function BuyerDashboard() {
                             value={personalInfo.last_name}
                             onChange={(e) => setPersonalInfo({ ...personalInfo, last_name: e.target.value })}
                             className="pl-9 h-10"
+                            placeholder={profile?.last_name || "Last name"}
                           />
                         </div>
                       </div>
-                      
                       <div>
                         <Label>Phone</Label>
                         <div className="relative">
@@ -619,6 +727,7 @@ export function BuyerDashboard() {
                             value={personalInfo.phone_number}
                             onChange={(e) => setPersonalInfo({ ...personalInfo, phone_number: e.target.value })}
                             className="pl-9 h-10"
+                            placeholder={profile?.phone_number || "Phone number"}
                           />
                         </div>
                       </div>
@@ -828,10 +937,10 @@ export function BuyerDashboard() {
             )}
           </DialogContent>
         </Dialog>
- <div>
-    <AutoLogout />
-    {/* Your content */}
-  </div>
+
+        <div>
+          <AutoLogout />
+        </div>
         <Chatbot className="mt-8" />
       </div>
     </>

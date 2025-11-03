@@ -91,7 +91,7 @@ export default function ConfirmEmailPage() {
         setTimeout(() => {
           if (!mounted) return
           setStatus('success')
-          setMessage('Your email has been successfully verified! Welcome to RealEstate Pro.')
+          setMessage('Your email has been successfully verified! Welcome to WohnTraume.')
           setShowConfetti(true)
         }, 500)
 
@@ -156,7 +156,7 @@ export default function ConfirmEmailPage() {
           >
             <Building2 className="h-8 w-8 text-primary" />
           </motion.div>
-          <h1 className="text-3xl font-bold">RealEstate Pro</h1>
+          <h1 className="text-3xl font-bold">WohnTraume</h1>
           <Badge variant="secondary" className="mt-2 px-4 py-1 bg-primary/10">
             <MailCheck className="w-3 h-3 mr-1" />
             Email Verification
@@ -186,7 +186,7 @@ export default function ConfirmEmailPage() {
                   {status === 'error' && 'Verification Issue'}
                 </CardTitle>
                 <CardDescription className="text-lg">
-                  {status === 'loading' && 'Securing your RealEstate Pro account...'}
+                  {status === 'loading' && 'Securing your WohnTraume Pro account...'}
                   {status === 'success' && 'Your journey begins now'}
                   {status === 'error' && 'Let us help you get back on track'}
                 </CardDescription>
@@ -417,7 +417,7 @@ export default function ConfirmEmailPage() {
             Need help? <a href="mailto:yassinehamza.pro@gmail.com" className="text-primary hover:underline">Contact Support</a>
           </p>
           <p className="text-xs text-muted-foreground">
-            © 2024 RealEstate Pro. All rights reserved.
+            © 2024 WohnTraume. All rights reserved.
           </p>
         </motion.div>
       </div>

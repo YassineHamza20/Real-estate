@@ -14,7 +14,7 @@ export function Footer() {
               <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
                 <Building2 className="h-6 w-6 text-black" />
               </div>
-              <span className="text-xl font-bold text-primary">EstateHub</span>
+              <span className="text-xl font-bold text-primary">WohnTraume</span>
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed">
               Your trusted partner in finding the perfect property. We make real estate simple, transparent, and
@@ -119,10 +119,10 @@ export function Footer() {
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-primary flex-shrink-0" />
                 <a
-                  href="mailto:support@estatehub.com"
+                  href="mailto:support@WohnTraume.com"
                   className="text-sm text-gray-400 hover:text-primary transition-colors"
                 >
-                  support@estatehub.com
+                  support@WohnTraume.com
                 </a>
               </li>
             </ul>
@@ -132,7 +132,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-primary/20">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-gray-400">© {currentYear} EstateHub. All rights reserved.</p>
+            <p className="text-sm text-gray-400">© {currentYear} WohnTraume. All rights reserved.</p>
             <div className="flex gap-6">
               <Link href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
                 Privacy

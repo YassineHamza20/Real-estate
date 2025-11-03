@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select"
-
+import { Footer } from "@/components/footer"
 export function SellerDashboard() {
   const { user, refreshUser } = useAuth()
   const { toast } = useToast() 
@@ -262,6 +262,7 @@ export function SellerDashboard() {
   }, [myListings, searchQuery, sortBy])
 
   return (
+    <>
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Header */}
       <div className="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -702,6 +703,9 @@ export function SellerDashboard() {
       <div>
         <AutoLogout />
       </div>
+      
     </div>
+    <Footer />
+    </>
   )
 }

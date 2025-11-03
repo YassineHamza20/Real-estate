@@ -8,7 +8,7 @@ import { SellerDashboard } from "@/components/dashboards/seller-dashboard"
 import { AdminDashboard } from "@/components/dashboards/admin-dashboard"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AutoLogout } from "@/components/auto-logout"
-
+ 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()

@@ -36,7 +36,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useTheme } from "next-themes"
 import { useInView } from "react-intersection-observer"
 import confetti from "canvas-confetti"
-
+import { Footer } from "@/components/footer"
 export function BuyerDashboard() {
   const router = useRouter()
   const { user, refreshUser, isAuthenticated } = useAuth()
@@ -942,7 +942,9 @@ export function BuyerDashboard() {
           <AutoLogout />
         </div>
         <Chatbot className="mt-8" />
+        
       </div>
+      <Footer />
     </>
   )
 }

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Building2, Menu, Home, LogOut } from "lucide-react"
+import { Building2, Menu, Home, LogOut, Moon, Sun } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -18,6 +18,25 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { motion, AnimatePresence } from "framer-motion"
+import { useTheme } from "next-themes"
+
+// Theme Toggle Component
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme()
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      className="h-9 w-9 rounded-full"
+      aria-label="Toggle theme"
+    >
+      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </Button>
+  )
+}
 
 export function Navbar() {
   const pathname = usePathname()
@@ -151,7 +170,12 @@ export function Navbar() {
             </nav>
 
             {/* Desktop Auth */}
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-2">
+              {/* Theme Toggle */}
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <ThemeToggle />
+              </motion.div>
+              
               {user ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -256,6 +280,13 @@ export function Navbar() {
                     Menu
                   </SheetTitle>
                 </SheetHeader>
+
+                {/* Theme Toggle in Mobile Menu */}
+                <div className="flex justify-center mb-6">
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <ThemeToggle />
+                  </motion.div>
+                </div>
 
                 <nav className="flex flex-col space-y-2" aria-label="Mobile navigation">
                   {navLinks.map((link) => (

@@ -7,6 +7,7 @@ import { GlobalChatbot } from "@/components/global-chatbot"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toaster"
+import { GoogleOAuthScript } from "@/components/google-oauth-script"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,6 +26,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <GoogleOAuthScript />
+      </head>
       <body className={cn(inter.variable, "font-sans antialiased")}>
         <ThemeProvider>
           <AuthProvider>

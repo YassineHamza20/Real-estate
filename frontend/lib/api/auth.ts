@@ -360,24 +360,27 @@ export const usersApi = {
     localStorage.removeItem("user")
   },
 
-  async getCurrentUser() {
-    const token = localStorage.getItem("access_token")
-    if (!token) {
-      throw new Error('No token found')
-    }
+ // In your auth-context.tsx or wherever getCurrentUser is defined
+async getCurrentUser(): Promise<User> {
+  // Check for both token names for compatibility
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token');
+  if (!token) throw new Error('Not authenticated');
+  
+  const response = await fetch(`${API_BASE_URL}/api/users/profile/`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
 
-    const response = await fetch(`${API_BASE_URL}/users/profile/`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    })
-    
-    if (!response.ok) {
-      throw new Error('Failed to get user data')
-    }
-    
-    return response.json()
-  },
+  if (!response.ok) {
+    // If token is invalid, clear it
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    throw new Error('Authentication failed');
+  }
+
+  return response.json();
+}
 }

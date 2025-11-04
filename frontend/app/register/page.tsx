@@ -18,6 +18,36 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
+// Declare google on window
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
+function GoogleIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  )
+}
+
 export default function RegisterPage() {
   const router = useRouter()
   const [formData, setFormData] = useState({
@@ -31,6 +61,7 @@ export default function RegisterPage() {
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
@@ -39,6 +70,7 @@ export default function RegisterPage() {
   const [passwordStrength, setPasswordStrength] = useState(0)
   const [resendTimer, setResendTimer] = useState(0)
   const [mounted, setMounted] = useState(false)
+  const [googleScriptLoaded, setGoogleScriptLoaded] = useState(false)
 
   // Mount + localStorage check
   useEffect(() => {
@@ -48,6 +80,32 @@ export default function RegisterPage() {
       setSuccess(true)
       setUserEmail(savedEmail)
     }
+  }, [])
+
+  // Load Google Script
+  useEffect(() => {
+    const loadGoogleScript = () => {
+      if (window.google) {
+        setGoogleScriptLoaded(true)
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://accounts.google.com/gsi/client'
+      script.async = true
+      script.defer = true
+      script.onload = () => {
+        console.log('Google Identity Services loaded successfully')
+        setGoogleScriptLoaded(true)
+      }
+      script.onerror = () => {
+        console.error('Failed to load Google Identity Services')
+        setError('Failed to load Google authentication. Please refresh the page.')
+      }
+      document.head.appendChild(script)
+    }
+
+    loadGoogleScript()
   }, [])
 
   // Password strength
@@ -114,6 +172,87 @@ export default function RegisterPage() {
     }
   }
 
+  const handleGoogleSignUp = async () => {
+    setError("")
+    setGoogleLoading(true)
+
+    try {
+      // Get CSRF token first
+      const csrfResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/csrf/`)
+      const csrfData = await csrfResponse.json()
+
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+        scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+        callback: async (response: any) => {
+          try {
+            if (response.error) {
+              throw new Error(`Google auth error: ${response.error}`)
+            }
+
+            if (!response.access_token) {
+              throw new Error('No access token received from Google')
+            }
+
+            console.log('🔐 Google access token received, sending to backend...')
+
+            // Send to your backend
+            const authResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/google/`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfData.csrfToken,
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                access_token: response.access_token
+              }),
+            })
+
+            const data = await authResponse.json()
+            console.log('🔐 Backend authentication response:', data)
+            
+            if (data.success) {
+              // Store tokens properly - for both old and new systems
+              if (data.tokens) {
+                localStorage.setItem('access_token', data.tokens.access)
+                localStorage.setItem('refresh_token', data.tokens.refresh)
+                localStorage.setItem('auth_token', data.tokens.access) // For compatibility
+                
+                console.log('✅ Tokens stored:')
+                console.log('   - access_token:', data.tokens.access ? '✓' : '✗')
+                console.log('   - auth_token:', data.tokens.access ? '✓' : '✗')
+                console.log('   - refresh_token:', data.tokens.refresh ? '✓' : '✗')
+              }
+              
+              // Update auth context state
+              if (data.user) {
+                console.log('✅ User authenticated:', data.user.email)
+              }
+              
+              // Redirect to properties
+              window.location.href = data.redirect_url || '/properties'
+            } else {
+              throw new Error(data.error || 'Authentication failed')
+            }
+          } catch (error: any) {
+            console.error('Google auth error:', error)
+            setError(error.message)
+          } finally {
+            setGoogleLoading(false)
+          }
+        }
+      })
+
+      client.requestAccessToken()
+
+    } catch (error: any) {
+      console.error('Google sign up error:', error)
+      setError(error.message)
+      setGoogleLoading(false)
+    }
+  }
+
   const handleResendEmail = async () => {
     if (resendTimer > 0) return
     setResendLoading(true)
@@ -132,6 +271,14 @@ export default function RegisterPage() {
     setSuccess(false)
     setUserEmail('')
     setFormData({ ...formData, email: '' })
+  }
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -213,6 +360,7 @@ export default function RegisterPage() {
               "Access verified listings",
               "24/7 expert support",
               "Enterprise-grade security",
+              "Quick sign up with Google",
             ].map((f, i) => (
               <motion.div
                 key={i}
@@ -362,7 +510,7 @@ export default function RegisterPage() {
                             value={formData.firstName}
                             onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                             required
-                            disabled={isLoading}
+                            disabled={isLoading || googleLoading}
                             className="h-12 pl-10 pr-4 text-base border-2 focus:border-primary/50 transition-colors"
                           />
                         </div>
@@ -378,7 +526,7 @@ export default function RegisterPage() {
                             value={formData.lastName}
                             onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                             required
-                            disabled={isLoading}
+                            disabled={isLoading || googleLoading}
                             className="h-12 pl-10 pr-4 text-base border-2 focus:border-primary/50 transition-colors"
                           />
                         </div>
@@ -397,7 +545,7 @@ export default function RegisterPage() {
                           value={formData.username}
                           onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                           required
-                          disabled={isLoading}
+                          disabled={isLoading || googleLoading}
                           className="h-12 pl-10 pr-4 text-base border-2 focus:border-primary/50 transition-colors"
                         />
                       </div>
@@ -414,7 +562,7 @@ export default function RegisterPage() {
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           required
-                          disabled={isLoading}
+                          disabled={isLoading || googleLoading}
                           className="h-12 pl-10 pr-4 text-base border-2 focus:border-primary/50 transition-colors"
                         />
                       </div>
@@ -431,7 +579,7 @@ export default function RegisterPage() {
                           placeholder="+49 (555) 123-4567"
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          disabled={isLoading}
+                          disabled={isLoading || googleLoading}
                           className="h-12 pl-10 pr-4 text-base border-2 focus:border-primary/50 transition-colors"
                         />
                       </div>
@@ -450,7 +598,7 @@ export default function RegisterPage() {
                             value={formData.password}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             required
-                            disabled={isLoading}
+                            disabled={isLoading || googleLoading}
                             className="h-12 pl-10 pr-12 text-base border-2 focus:border-primary/50 transition-colors"
                           />
                           <button
@@ -458,6 +606,7 @@ export default function RegisterPage() {
                             onClick={() => setShowPassword(!showPassword)}
                             className="absolute right-3 top-3.5 text-muted-foreground hover:text-primary transition-colors"
                             tabIndex={-1}
+                            disabled={isLoading || googleLoading}
                           >
                             {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                           </button>
@@ -490,7 +639,7 @@ export default function RegisterPage() {
                             value={formData.confirmPassword}
                             onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                             required
-                            disabled={isLoading}
+                            disabled={isLoading || googleLoading}
                             className="h-12 pl-10 pr-12 text-base border-2 focus:border-primary/50 transition-colors"
                           />
                           <button
@@ -498,6 +647,7 @@ export default function RegisterPage() {
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                             className="absolute right-3 top-3.5 text-muted-foreground hover:text-primary transition-colors"
                             tabIndex={-1}
+                            disabled={isLoading || googleLoading}
                           >
                             {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                           </button>
@@ -511,7 +661,7 @@ export default function RegisterPage() {
                       type="submit"
                       size="lg"
                       className="w-full h-12 text-base font-medium shadow-lg hover:shadow-xl"
-                      disabled={isLoading}
+                      disabled={isLoading || googleLoading}
                     >
                       {isLoading ? (
                         <>
@@ -530,15 +680,20 @@ export default function RegisterPage() {
                       </span>
                     </div>
 
+                    {/* Google OAuth Button */}
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => alert("Google login coming soon!")}
-                      disabled={isLoading}
-                      className="w-full h-11 border-2 hover:border-primary/50"
+                      onClick={handleGoogleSignUp}
+                      disabled={isLoading || googleLoading || !googleScriptLoaded}
+                      className="w-full h-11 border-2 hover:border-primary/50 flex items-center justify-center gap-3"
                     >
-                      <Mail className="mr-2 h-4 w-4" />
-                      Continue with Google
+                      {googleLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <GoogleIcon />
+                      )}
+                      {googleLoading ? "Connecting..." : !googleScriptLoaded ? "Loading..." : "Continue with Google"}
                     </Button>
 
                     <div className="text-center text-sm">

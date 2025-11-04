@@ -248,21 +248,21 @@ export default function PropertiesPage() {
                 layout
                 className={`grid gap-6 ${viewMode === "grid" ? "md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}
               >
-                <AnimatePresence>
-                  {properties.map((property, i) => (
-                    <motion.div
-                      key={property.id}
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ delay: i * 0.05 }}
-                      ref={i === properties.length - 1 ? lastPropertyRef : null}
-                    >
-                      <PropertyCard property={property} viewMode={viewMode} />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+               <AnimatePresence>
+  {properties.map((property, i) => (
+    <motion.div
+      key={`${property.id}-${i}`}
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ delay: i * 0.05 }}
+      ref={i === properties.length - 1 ? lastPropertyRef : null}
+    >
+      <PropertyCard property={property} viewMode={viewMode} />
+    </motion.div>
+  ))}
+</AnimatePresence>
               </motion.div>
             )}
 

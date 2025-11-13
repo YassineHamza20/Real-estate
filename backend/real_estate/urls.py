@@ -32,9 +32,12 @@ urlpatterns = [
  path('api/debug/', views.debug_test, name='debug_test'),
      
       path('api/auth/test/', views.test_google_auth, name='test_auth'),
-  path('api/auth/csrf/', views.get_csrf_token, name='get_csrf_token'),
+     path('api/auth/csrf/', views.get_csrf_token, name='get_csrf_token'),
     path('api/auth/success/', views.auth_success, name='auth_success'),
     path('api/auth/google/', views.google_auth, name='google_auth'),
+    
+
+
     
 ]
 if settings.DEBUG:

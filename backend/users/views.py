@@ -18,6 +18,13 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str   
 from rest_framework.parsers import MultiPartParser, FormParser
+##ADMIN VIEWS BELOW##
+from .serializers import (
+    AdminUserSerializer, AdminUserCreateSerializer, AdminUserUpdateSerializer,
+    AdminSellerVerificationSerializer, AdminStatsSerializer
+)
+from django.db import models
+from django.utils import timezone
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -351,3 +358,268 @@ def get_seller_contact_info(request, seller_id):
         })
     except User.DoesNotExist:
         return Response({"error": "Seller not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+
+
+
+# Add these to your existing users/views.py
+
+from .serializers import (
+    AdminUserSerializer, AdminUserCreateSerializer, AdminUserUpdateSerializer,
+    AdminSellerVerificationSerializer, AdminStatsSerializer
+)
+
+# Admin Permissions
+class IsAdminUser(permissions.BasePermission):
+    """
+    Custom permission to only allow admin users to access the view.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == User.Role.ADMIN
+
+# Admin User Management Views
+class AdminUserListView(generics.ListCreateAPIView):
+    serializer_class = AdminUserSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    
+    def get_queryset(self):
+        queryset = User.objects.all().order_by('-date_joined')
+        
+        # Filter by role
+        role = self.request.query_params.get('role', None)
+        if role:
+            queryset = queryset.filter(role=role)
+        
+        # Filter by active status
+        is_active = self.request.query_params.get('is_active', None)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # Search by username, email, first name, last name
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                models.Q(username__icontains=search) |
+                models.Q(email__icontains=search) |
+                models.Q(first_name__icontains=search) |
+                models.Q(last_name__icontains=search)
+            )
+        
+        return queryset
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return AdminUserCreateSerializer
+        return AdminUserSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = AdminUserSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    lookup_field = 'id'
+    
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return AdminUserUpdateSerializer
+        return AdminUserSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def perform_destroy(self, instance):
+        # Soft delete by deactivating the user instead of actually deleting
+        instance.is_active = False
+        instance.save()
+
+# Admin Seller Verification Management
+class AdminSellerVerificationListView(generics.ListAPIView):
+    serializer_class = AdminSellerVerificationSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    
+    def get_queryset(self):
+        queryset = SellerVerification.objects.all().select_related('user').order_by('-submitted_at')
+        
+        # Filter by status
+        status = self.request.query_params.get('status', None)
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        return queryset
+
+class AdminSellerVerificationDetailView(generics.RetrieveUpdateAPIView):
+    queryset = SellerVerification.objects.all()
+    serializer_class = AdminSellerVerificationSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    lookup_field = 'id'
+    
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        
+        # If status is changed to approved, update user role to seller
+        if (serializer.validated_data.get('status') == 
+            SellerVerification.VerificationStatus.APPROVED and 
+            instance.user.role != User.Role.SELLER):
+            
+            instance.user.role = User.Role.SELLER
+            instance.user.save()
+        
+        # Set reviewed_at timestamp
+        if 'status' in serializer.validated_data:
+            instance.reviewed_at = timezone.now()
+            instance.save()
+
+################################## Admin Dashboard Stats
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_dashboard_stats(request):
+    """Get dashboard statistics for admin"""
+    total_users = User.objects.count()
+    total_buyers = User.objects.filter(role=User.Role.BUYER).count()
+    total_sellers = User.objects.filter(role=User.Role.SELLER).count()
+    total_admins = User.objects.filter(role=User.Role.ADMIN).count()
+    
+    pending_verifications = SellerVerification.objects.filter(
+        status=SellerVerification.VerificationStatus.PENDING
+    ).count()
+    approved_verifications = SellerVerification.objects.filter(
+        status=SellerVerification.VerificationStatus.APPROVED
+    ).count()
+    rejected_verifications = SellerVerification.objects.filter(
+        status=SellerVerification.VerificationStatus.REJECTED
+    ).count()
+    
+    stats = {
+        'total_users': total_users,
+        'total_buyers': total_buyers,
+        'total_sellers': total_sellers,
+        'total_admins': total_admins,
+        'pending_verifications': pending_verifications,
+        'approved_verifications': approved_verifications,
+        'rejected_verifications': rejected_verifications,
+    }
+    
+    serializer = AdminStatsSerializer(stats)
+    return Response(serializer.data)
+
+# Bulk actions for admin
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_bulk_user_actions(request):
+    """Bulk actions for users (activate, deactivate, delete)"""
+    user_ids = request.data.get('user_ids', [])
+    action = request.data.get('action')
+    
+    if not user_ids or not action:
+        return Response(
+            {'error': 'user_ids and action are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    users = User.objects.filter(id__in=user_ids)
+    
+    if action == 'activate':
+        users.update(is_active=True)
+        message = f'{users.count()} users activated successfully'
+    elif action == 'deactivate':
+        users.update(is_active=False)
+        message = f'{users.count()} users deactivated successfully'
+    elif action == 'delete':
+        # Soft delete
+        users.update(is_active=False)
+        message = f'{users.count()} users deleted successfully'
+    else:
+        return Response(
+            {'error': 'Invalid action. Use activate, deactivate, or delete'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    return Response({'message': message})
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_bulk_verification_actions(request):
+    """Bulk actions for seller verifications (approve, reject)"""
+    verification_ids = request.data.get('verification_ids', [])
+    action = request.data.get('action')
+    admin_notes = request.data.get('admin_notes', '')
+    
+    if not verification_ids or not action:
+        return Response(
+            {'error': 'verification_ids and action are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    verifications = SellerVerification.objects.filter(id__in=verification_ids)
+    
+    if action == 'approve':
+        for verification in verifications:
+            verification.status = SellerVerification.VerificationStatus.APPROVED
+            verification.reviewed_at = timezone.now()
+            verification.admin_notes = admin_notes
+            verification.save()
+            
+            # Update user role to seller
+            user = verification.user
+            user.role = User.Role.SELLER
+            user.save()
+        
+        message = f'{verifications.count()} verifications approved successfully'
+    
+    elif action == 'reject':
+        verifications.update(
+            status=SellerVerification.VerificationStatus.REJECTED,
+            reviewed_at=timezone.now(),
+            admin_notes=admin_notes
+        )
+        message = f'{verifications.count()} verifications rejected successfully'
+    
+    else:
+        return Response(
+            {'error': 'Invalid action. Use approve or reject'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    return Response({'message': message})
+
+ 
+
+class AdminUserDetailView(generics.RetrieveUpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = AdminUserSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    lookup_field = 'id'
+    
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return AdminUserUpdateSerializer
+        return AdminUserSerializer
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_user_full_detail(request, user_id):
+    """Get complete user details including verification info"""
+    try:
+        user = User.objects.get(id=user_id)
+        
+        # Get verification details if user is a seller
+        verification_data = None
+        if user.role == User.Role.SELLER:
+            try:
+                verification = SellerVerification.objects.get(user=user)
+                verification_data = AdminSellerVerificationSerializer(verification).data
+            except SellerVerification.DoesNotExist:
+                verification_data = None
+        
+        user_data = AdminUserSerializer(user).data
+        user_data['verification_details'] = verification_data
+        
+        return Response(user_data)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)

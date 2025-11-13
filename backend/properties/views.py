@@ -4,12 +4,16 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+
 from .models import Property, PropertyImage
 from .serializers import PropertySerializer, PropertyCreateSerializer, PropertyImageSerializer,WishlistSerializer
 from .permissions import IsVerifiedSellerOrReadOnly, IsPropertyOwnerOrReadOnly, IsVerifiedSeller
 from .models import Property, PropertyImage, Wishlist  # Add Wishlist
  # Add WishlistSerializer
-
+ ###Admin
+from rest_framework.permissions import IsAdminUser
+from django.db.models import Count, Q
+from django.contrib.auth import get_user_model
 class PropertyListCreateView(generics.ListCreateAPIView):
     queryset = Property.objects.all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -190,3 +194,153 @@ class PropertyImageDetailView(generics.DestroyAPIView):
         if instance.image:
             instance.image.delete()
         instance.delete()
+
+
+########ADMINN###
+# properties/views.py - Add these imports at the top
+
+
+# Add these admin views after your existing views
+class AdminPropertyListView(generics.ListAPIView):
+    """
+    Admin view to list all properties with advanced filtering
+    """
+    serializer_class = PropertySerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['property_type', 'city', 'number_of_rooms', 'is_available', 'seller']
+    search_fields = ['name', 'description', 'address', 'city', 'seller__username', 'seller__email']
+    ordering_fields = ['price', 'created_at', 'size', 'number_of_rooms']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = Property.objects.all().select_related('seller').prefetch_related('images')
+        
+        # Additional filters for admin
+        status_filter = self.request.query_params.get('status', None)
+        if status_filter == 'active':
+            queryset = queryset.filter(is_available=True)
+        elif status_filter == 'inactive':
+            queryset = queryset.filter(is_available=False)
+            
+        return queryset
+
+class AdminPropertyDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Admin view to retrieve, update, or delete any property
+    """
+    queryset = Property.objects.all()
+    serializer_class = PropertySerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def perform_update(self, serializer):
+        # Admin can update any property without ownership check
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Delete associated images
+        instance.images.all().delete()
+        instance.delete()
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_property_stats(request):
+    """
+    Get statistics for admin dashboard
+    """
+    total_properties = Property.objects.count()
+    active_properties = Property.objects.filter(is_available=True).count()
+    properties_by_type = Property.objects.values('property_type').annotate(count=Count('id'))
+    properties_by_city = Property.objects.values('city').annotate(count=Count('id')).order_by('-count')[:10]
+    
+    # Recent properties (last 7 days)
+    from django.utils import timezone
+    from datetime import timedelta
+    week_ago = timezone.now() - timedelta(days=7)
+    recent_properties = Property.objects.filter(created_at__gte=week_ago).count()
+    
+    # Top sellers
+    top_sellers = get_user_model().objects.annotate(
+        property_count=Count('properties')
+    ).filter(property_count__gt=0).order_by('-property_count')[:5]
+    
+    top_sellers_data = [
+        {
+            'username': seller.username,
+            'email': seller.email,
+            'property_count': seller.property_count
+        }
+        for seller in top_sellers
+    ]
+    
+    return Response({
+        'total_properties': total_properties,
+        'active_properties': active_properties,
+        'inactive_properties': total_properties - active_properties,
+        'recent_properties': recent_properties,
+        'properties_by_type': list(properties_by_type),
+        'top_cities': list(properties_by_city),
+        'top_sellers': top_sellers_data
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def admin_bulk_property_action(request):
+    """
+    Bulk actions for properties (activate, deactivate, delete)
+    """
+    property_ids = request.data.get('property_ids', [])
+    action = request.data.get('action')  # 'activate', 'deactivate', 'delete'
+    
+    if not property_ids:
+        return Response({"error": "No property IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if action not in ['activate', 'deactivate', 'delete']:
+        return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    properties = Property.objects.filter(id__in=property_ids)
+    
+    if action == 'activate':
+        properties.update(is_available=True)
+        message = f"Activated {properties.count()} properties"
+    elif action == 'deactivate':
+        properties.update(is_available=False)
+        message = f"Deactivated {properties.count()} properties"
+    elif action == 'delete':
+        count = properties.count()
+        # Delete associated images first
+        for property_obj in properties:
+            property_obj.images.all().delete()
+        properties.delete()
+        message = f"Deleted {count} properties"
+    
+    return Response({"message": message})
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_property_filters(request):
+    """
+    Get enhanced filter options for admin
+    """
+    cities = Property.objects.values_list('city', flat=True).distinct()
+    property_types = Property.objects.values_list('property_type', flat=True).distinct()
+    sellers = get_user_model().objects.filter(properties__isnull=False).distinct().values('id', 'username')
+    
+    # Price ranges for filtering
+    price_stats = Property.objects.aggregate(
+        min_price=models.Min('price'),
+        max_price=models.Max('price'),
+        avg_price=models.Avg('price')
+    )
+    
+    return Response({
+        'cities': list(cities),
+        'property_types': list(property_types),
+        'sellers': list(sellers),
+        'price_ranges': {
+            'min': price_stats['min_price'] or 0,
+            'max': price_stats['max_price'] or 0,
+            'avg': price_stats['avg_price'] or 0
+        },
+        'room_options': [1, 2, 3, 4, 5, 6],
+    })

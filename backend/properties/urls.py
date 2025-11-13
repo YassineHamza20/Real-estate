@@ -17,4 +17,10 @@ urlpatterns = [
     path('wishlist/<int:pk>/', views.WishlistDetailView.as_view(), name='wishlist-detail'),
     path('wishlist/toggle/<int:property_id>/', views.toggle_wishlist, name='toggle-wishlist'),
     path('wishlist/check/<int:property_id>/', views.check_wishlist_status, name='check-wishlist'),
+
+    path('admin/properties/', views.AdminPropertyListView.as_view(), name='admin-property-list'),
+    path('admin/properties/<int:pk>/', views.AdminPropertyDetailView.as_view(), name='admin-property-detail'),
+    path('admin/properties/stats/', views.admin_property_stats, name='admin-property-stats'),
+    path('admin/properties/bulk-action/', views.admin_bulk_property_action, name='admin-bulk-property-action'),
+    path('admin/properties/filters/', views.admin_property_filters, name='admin-property-filters'),
 ]

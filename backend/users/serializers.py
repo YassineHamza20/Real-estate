@@ -248,4 +248,109 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 
 
- 
+############ADMIN
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    verification_status = serializers.SerializerMethodField()
+    profile_picture_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role', 
+                 'phone_number', 'email_verified', 'profile_picture', 'profile_picture_url',
+                 'is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login',
+                 'created_at', 'updated_at', 'verification_status')
+        read_only_fields = ('id', 'date_joined', 'last_login', 'created_at', 'updated_at')
+
+    def get_verification_status(self, obj):
+        if obj.role == User.Role.SELLER:
+            try:
+                return obj.seller_verification.status
+            except SellerVerification.DoesNotExist:
+                return 'not_submitted'
+        return None
+    
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
+
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password_confirm = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'password', 'password_confirm', 'first_name', 
+                 'last_name', 'role', 'phone_number', 'is_active', 'is_staff')
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({"password": "Password fields didn't match."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        password = validated_data.pop('password')
+        user = User.objects.create_user(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'first_name', 'last_name', 'role', 
+                 'phone_number', 'is_active', 'is_staff', 'profile_picture')
+
+class AdminSellerVerificationSerializer(serializers.ModelSerializer):
+    user_details = AdminUserSerializer(source='user', read_only=True)
+    
+    class Meta:
+        model = SellerVerification
+        fields = '__all__'
+        read_only_fields = ('submitted_at', 'reviewed_at')
+
+class AdminStatsSerializer(serializers.Serializer):
+    total_users = serializers.IntegerField()
+    total_buyers = serializers.IntegerField()
+    total_sellers = serializers.IntegerField()
+    total_admins = serializers.IntegerField()
+    pending_verifications = serializers.IntegerField()
+    approved_verifications = serializers.IntegerField()
+    rejected_verifications = serializers.IntegerField()
+
+
+####
+class AdminUserSerializer(serializers.ModelSerializer):
+    verification_status = serializers.SerializerMethodField()
+    profile_picture_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = '__all__'
+
+    def get_verification_status(self, obj):
+        if obj.role == User.Role.SELLER:
+            try:
+                return obj.seller_verification.status
+            except SellerVerification.DoesNotExist:
+                return 'not_submitted'
+        return None
+    
+    def get_profile_picture_url(self, obj):
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
+
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'email', 'phone_number', 'role', 'is_active', 'is_staff')

@@ -35,6 +35,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select"
 import { Footer } from "@/components/footer"
+
+
+
+
+
 export function SellerDashboard() {
   const { user, refreshUser } = useAuth()
   const { toast } = useToast() 

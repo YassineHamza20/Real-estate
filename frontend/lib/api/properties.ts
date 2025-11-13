@@ -608,5 +608,5 @@ async deletePropertyImage(imageId: string): Promise<void> {
     throw error
   }
 }
-
+,
 }

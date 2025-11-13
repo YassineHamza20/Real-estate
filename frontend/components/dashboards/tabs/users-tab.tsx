@@ -1,0 +1,1008 @@
+"use client"
+
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { useAuth } from "@/contexts/auth-context"
+import { Separator } from "@/components/ui/separator"
+import { 
+  Users, Home, DollarSign, TrendingUp, Search, MoreVertical, 
+  CheckCircle, XCircle, Loader2, Plus, RefreshCw, Shield, 
+  UserCheck, UserX, Mail, Phone, Calendar, Edit, Save, X,
+  Eye, Shield as StaffIcon, Verified, Clock, User,
+  FileText
+} from "lucide-react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { toast } from "@/hooks/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
+import { motion } from "framer-motion"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useToast } from "@/hooks/use-toast"
+
+// Types based on your backend
+interface User {
+  id: number
+  username: string
+  email: string
+  first_name: string
+  last_name: string
+  role: 'buyer' | 'seller' | 'admin'
+  phone_number: string
+  email_verified: boolean
+  is_active: boolean
+  is_staff: boolean
+  is_superuser: boolean
+  date_joined: string
+  last_login: string
+  created_at: string
+  updated_at: string
+  verification_status?: string
+  profile_picture_url?: string
+}
+
+interface SellerVerification {
+  id: number
+  user: number
+  user_details: User
+  document: string
+  status: 'pending' | 'approved' | 'rejected'
+  submitted_at: string
+  reviewed_at: string | null
+  admin_notes: string
+}
+
+interface UserFullDetail extends User {
+  verification_details?: SellerVerification
+}
+
+// FIX: Get API URL with fallback
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// API functions
+const adminApi = {
+  async getUsers(token: string, search?: string, role?: string): Promise<User[]> {
+    const params = new URLSearchParams()
+    if (search) params.append('search', search)
+    if (role && role !== 'all') params.append('role', role)
+    
+    const url = `${API_BASE_URL}/api/users/admin/users/?${params}`
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch users: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    return Array.isArray(data) ? data : data.results || []
+  },
+
+  async getUserFullDetail(token: string, userId: number): Promise<UserFullDetail> {
+    const response = await fetch(`${API_BASE_URL}/api/users/admin/users/${userId}/full/`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user details: ${response.status}`)
+    }
+    
+    return response.json()
+  },
+
+  async updateUser(token: string, userId: number, userData: Partial<User>): Promise<User> {
+    const response = await fetch(`${API_BASE_URL}/api/users/admin/users/${userId}/`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || `Failed to update user: ${response.status}`)
+    }
+    
+    return response.json()
+  },
+
+  async bulkUserAction(token: string, userIds: number[], action: 'activate' | 'deactivate' | 'delete'): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/users/admin/bulk-users/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_ids: userIds,
+        action: action
+      }),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to ${action} users`)
+    }
+  },
+}
+
+export function UsersTab() {
+  const { user: currentUser, token: authToken } = useAuth()
+  const { toast } = useToast()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeTab, setActiveTab] = useState("users")
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState({
+    users: false,
+    userDetail: false
+  })
+  const [roleFilter, setRoleFilter] = useState<string>("all")
+  
+  // User detail modal state
+  const [selectedUser, setSelectedUser] = useState<UserFullDetail | null>(null)
+  const [isUserDetailOpen, setIsUserDetailOpen] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<User>>({})
+  const [saving, setSaving] = useState(false)
+
+  // Get token from localStorage as fallback
+  const token = authToken || localStorage.getItem('access_token')
+
+  // Fetch users
+  const fetchUsers = useCallback(async () => {
+    if (!token) return
+    
+    setLoading(prev => ({ ...prev, users: true }))
+    try {
+      const data = await adminApi.getUsers(token, searchQuery, roleFilter)
+      setUsers(data)
+    } catch (error: any) {
+      console.error("[v0] Failed to fetch users:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load users",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, users: false }))
+    }
+  }, [token, searchQuery, roleFilter])
+
+  // Fetch user full details
+  const fetchUserDetail = async (userId: number) => {
+    if (!token) return
+    
+    setLoading(prev => ({ ...prev, userDetail: true }))
+    try {
+      const userDetail = await adminApi.getUserFullDetail(token, userId)
+      setSelectedUser(userDetail)
+      setEditForm({
+        first_name: userDetail.first_name,
+        last_name: userDetail.last_name,
+        email: userDetail.email,
+        phone_number: userDetail.phone_number,
+        role: userDetail.role,
+        is_active: userDetail.is_active,
+        is_staff: userDetail.is_staff,
+      })
+      setIsUserDetailOpen(true)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load user details",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, userDetail: false }))
+    }
+  }
+
+  // Handle user actions
+  const handleUserAction = async (userId: number, action: 'activate' | 'deactivate' | 'delete') => {
+    if (!token) return
+    
+    try {
+      await adminApi.bulkUserAction(token, [userId], action)
+      toast({
+        title: "Success",
+        description: `User ${action}d successfully`,
+      })
+      fetchUsers()
+      if (action === 'delete') {
+        setIsUserDetailOpen(false)
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || `Failed to ${action} user`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleRoleChange = async (userId: number, newRole: string) => {
+    if (!token) return
+    
+    try {
+      await adminApi.updateUser(token, userId, { role: newRole as User['role'] })
+      toast({
+        title: "Success",
+        description: "User role updated successfully",
+      })
+      fetchUsers()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user role",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Save user edits
+  const handleSaveUser = async () => {
+    if (!token || !selectedUser) return
+    
+    setSaving(true)
+    try {
+      const updatedUser = await adminApi.updateUser(token, selectedUser.id, editForm)
+      toast({
+        title: "Success",
+        description: "User updated successfully",
+      })
+      setSelectedUser(prev => prev ? { ...prev, ...updatedUser } : null)
+      setIsEditing(false)
+      fetchUsers()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Formatting functions
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    
+    if (diffInHours < 1) return 'Just now'
+    if (diffInHours < 24) return `${diffInHours}h ago`
+    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`
+    return formatDate(dateString)
+  }
+
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case 'admin': return 'default'
+      case 'seller': return 'secondary'
+      case 'buyer': return 'outline'
+      default: return 'outline'
+    }
+  }
+
+  const getStatusBadge = (user: User) => {
+    if (!user.is_active) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" />
+          Suspended
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="default" className="gap-1">
+        <CheckCircle className="h-3 w-3" />
+        Active
+      </Badge>
+    )
+  }
+
+  // Calculate basic stats from users data
+  const userStats = useMemo(() => {
+    const totalUsers = users.length
+    const totalBuyers = users.filter(u => u.role === 'buyer').length
+    const totalSellers = users.filter(u => u.role === 'seller').length
+    const totalAdmins = users.filter(u => u.role === 'admin').length
+    const activeUsers = users.filter(u => u.is_active).length
+    
+    return {
+      totalUsers,
+      totalBuyers,
+      totalSellers,
+      totalAdmins,
+      activeUsers
+    }
+  }, [users])
+
+  // Load data when tab changes
+  useEffect(() => {
+    if (activeTab === 'users') {
+      fetchUsers()
+    }
+  }, [activeTab, fetchUsers])
+
+  // Refresh users when search query changes
+  useEffect(() => {
+    if (activeTab === 'users') {
+      const timeoutId = setTimeout(() => {
+        fetchUsers()
+      }, 500)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [searchQuery, activeTab, fetchUsers])
+
+  // Don't render if user is not admin
+  if (currentUser && currentUser.role !== 'admin') {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <Shield className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
+        <p className="text-muted-foreground">You don't have permission to access the admin dashboard.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto px-0 py-1 max-w-7xl">
+      
+      
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        {[
+          { 
+            title: "Total Users", 
+            value: userStats.totalUsers, 
+            sub: `${userStats.activeUsers} active`, 
+            icon: Users,
+            loading: loading.users
+          },
+          { 
+            title: "Buyers", 
+            value: userStats.totalBuyers, 
+            sub: `${Math.round((userStats.totalBuyers / userStats.totalUsers) * 100) || 0}% of total`, 
+            icon: User,
+            loading: loading.users
+          },
+          { 
+            title: "Sellers", 
+            value: userStats.totalSellers, 
+            sub: `${Math.round((userStats.totalSellers / userStats.totalUsers) * 100) || 0}% of total`, 
+            icon: UserCheck,
+            loading: loading.users
+          },
+          { 
+            title: "Admins", 
+            value: userStats.totalAdmins, 
+            sub: "Platform administrators", 
+            icon: Shield,
+            loading: loading.users
+          },
+        ].map((stat, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1 }}
+          >
+            <Card className="border hover:border-primary/50 transition-all hover:shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                  {stat.loading ? (
+                    <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                  ) : (
+                    <stat.icon className="h-4 w-4 text-primary" />
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">{stat.sub}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Users Tab */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+       
+
+        <TabsContent value="users" className="space-y-6">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">User Management</h2>
+              <p className="text-muted-foreground">
+                {users.length} user{users.length !== 1 ? 's' : ''} found
+                {roleFilter !== 'all' && ` (filtered by ${roleFilter})`}
+              </p>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-10 w-full sm:w-64"
+                />
+              </div>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value="buyer">Buyer</SelectItem>
+                  <SelectItem value="seller">Seller</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={fetchUsers} variant="outline" size="icon">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <Card className="border">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading.users ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                        <p className="text-muted-foreground mt-2">Loading users...</p>
+                      </TableCell>
+                    </TableRow>
+                  ) : users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">No users found</h3>
+                        <p className="text-muted-foreground">
+                          {searchQuery || roleFilter !== 'all' 
+                            ? 'Try adjusting your search or filters' 
+                            : 'No users in the system'
+                          }
+                        </p>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    users.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={user.profile_picture_url} />
+                              <AvatarFallback className="text-xs">
+                                {user.first_name?.[0]}{user.last_name?.[0] || user.username?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium">
+                                {user.first_name && user.last_name 
+                                  ? `${user.first_name} ${user.last_name}`
+                                  : user.username
+                                }
+                              </div>
+                              <div className="text-xs text-muted-foreground">@{user.username}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            {user.email}
+                            {user.email_verified && (
+                              <Verified className="h-3 w-3 text-green-500" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Select 
+                            value={user.role} 
+                            onValueChange={(value) => handleRoleChange(user.id, value)}
+                          >
+                            <SelectTrigger className="w-24 h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="buyer">Buyer</SelectItem>
+                              <SelectItem value="seller">Seller</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(user)}
+                          {user.is_staff && (
+                            <Badge variant="outline" className="ml-2">
+                              <StaffIcon className="h-3 w-3 mr-1" />
+                              Staff
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {formatDate(user.date_joined)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {formatRelativeTime(user.date_joined)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => fetchUserDetail(user.id)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                fetchUserDetail(user.id)
+                                setIsEditing(true)
+                              }}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit User
+                              </DropdownMenuItem>
+                              {user.is_active ? (
+                                <DropdownMenuItem onClick={() => handleUserAction(user.id, 'deactivate')}>
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Suspend Account
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleUserAction(user.id, 'activate')}>
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Activate Account
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                className="text-destructive"
+                                onClick={() => handleUserAction(user.id, 'delete')}
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Delete User
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Enhanced User Detail Modal - FIXED SCROLLING */}
+      <Dialog open={isUserDetailOpen} onOpenChange={setIsUserDetailOpen}>
+        <DialogContent 
+          className="max-w-4xl w-full h-[90vh] p-0 rounded-lg flex flex-col"
+          showCloseButton={false}
+        >
+          {/* Hidden but accessible title for screen readers */}
+          <DialogHeader className="sr-only">
+            <DialogTitle>
+              User Details - {selectedUser?.first_name} {selectedUser?.last_name} ({selectedUser?.username})
+            </DialogTitle>
+          </DialogHeader>
+
+          {loading.userDetail ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+          ) : selectedUser && (
+            <>
+              {/* Header - Fixed */}
+              <div className="border-b bg-background px-6 py-4 flex-shrink-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-14 w-14 ring-2 ring-background">
+                      <AvatarImage src={selectedUser.profile_picture_url} />
+                      <AvatarFallback className="text-sm font-bold">
+                        {selectedUser.first_name?.[0]}{selectedUser.last_name?.[0] || selectedUser.username?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
+                        {selectedUser.first_name && selectedUser.last_name
+                          ? `${selectedUser.first_name} ${selectedUser.last_name}`
+                          : selectedUser.username}
+                        <Badge variant={getRoleBadgeVariant(selectedUser.role)} className="text-xs">
+                          {selectedUser.role}
+                        </Badge>
+                        {getStatusBadge(selectedUser)}
+                      </h2>
+                      <p className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-2">
+                        <span className="flex items-center gap-1">
+                          <Mail className="h-3 w-3" />
+                          {selectedUser.email}
+                          {selectedUser.email_verified && <Verified className="h-3 w-3 text-green-600" />}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          @{selectedUser.username}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                          <X className="h-4 w-4 mr-1" /> Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSaveUser} disabled={saving}>
+                          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                          Save
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" onClick={() => setIsEditing(true)}>
+                        <Edit className="h-4 w-4 mr-1" /> Edit
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsUserDetailOpen(false)}
+                      className="rounded-full h-8 w-8"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid gap-6 lg:grid-cols-3 min-h-0">
+                  {/* Left Column - Personal & Account Info */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* Personal Information */}
+                    <Card className="border">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <User className="h-4 w-4 text-primary" />
+                          Personal Information
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {isEditing ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="text-sm">First Name</Label>
+                              <Input
+                                value={editForm.first_name || ''}
+                                onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                                className="mt-1 h-9"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Last Name</Label>
+                              <Input
+                                value={editForm.last_name || ''}
+                                onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                                className="mt-1 h-9"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Email</Label>
+                              <Input
+                                type="email"
+                                value={editForm.email || ''}
+                                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                className="mt-1 h-9"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-sm">Phone</Label>
+                              <Input
+                                value={editForm.phone_number || ''}
+                                onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value })}
+                                className="mt-1 h-9"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <Label className="text-muted-foreground text-xs">First Name</Label>
+                              <p className="font-medium mt-1">{selectedUser.first_name || '—'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Last Name</Label>
+                              <p className="font-medium mt-1">{selectedUser.last_name || '—'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Email</Label>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="font-medium">{selectedUser.email}</span>
+                                {selectedUser.email_verified && <Verified className="h-3 w-3 text-green-600" />}
+                              </div>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Phone</Label>
+                              <p className="font-medium mt-1">{selectedUser.phone_number || '—'}</p>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Account Settings */}
+                    <Card className="border">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-primary" />
+                          Account Settings
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {isEditing ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="text-sm">Role</Label>
+                              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v as User['role'] })}>
+                                <SelectTrigger className="mt-1 h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="buyer">Buyer</SelectItem>
+                                  <SelectItem value="seller">Seller</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                                <Label htmlFor="active" className="cursor-pointer text-sm">Active</Label>
+                                <Switch
+                                  id="active"
+                                  checked={editForm.is_active}
+                                  onCheckedChange={(c) => setEditForm({ ...editForm, is_active: c })}
+                                  className="scale-90"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                                <Label htmlFor="staff" className="cursor-pointer text-sm">Staff</Label>
+                                <Switch
+                                  id="staff"
+                                  checked={editForm.is_staff}
+                                  onCheckedChange={(c) => setEditForm({ ...editForm, is_staff: c })}
+                                  className="scale-90"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Username</Label>
+                              <p className="font-medium mt-1">@{selectedUser.username}</p>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Status</Label>
+                              <div className="mt-1">{getStatusBadge(selectedUser)}</div>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Staff</Label>
+                              <Badge variant={selectedUser.is_staff ? "default" : "outline"} className="mt-1 text-xs">
+                                {selectedUser.is_staff ? "Yes" : "No"}
+                              </Badge>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground text-xs">Superuser</Label>
+                              <Badge variant={selectedUser.is_superuser ? "default" : "outline"} className="mt-1 text-xs">
+                                {selectedUser.is_superuser ? "Yes" : "No"}
+                              </Badge>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Seller Verification - NOW VISIBLE AND SCROLLABLE */}
+                    {selectedUser.role === 'seller' && (
+                      <Card className="border">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <UserCheck className="h-4 w-4 text-primary" />
+                            Seller Verification
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          {selectedUser.verification_details ? (
+                            <div className="space-y-4 text-sm">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                  <Label className="text-muted-foreground text-xs">Status</Label>
+                                  <Badge
+                                    variant={
+                                      selectedUser.verification_details.status === 'approved' ? 'default' :
+                                      selectedUser.verification_details.status === 'rejected' ? 'destructive' : 'secondary'
+                                    }
+                                    className="mt-1 text-xs"
+                                  >
+                                    {selectedUser.verification_details.status}
+                                  </Badge>
+                                </div>
+                                <div>
+                                  <Label className="text-muted-foreground text-xs">Submitted</Label>
+                                  <p className="font-medium mt-1 text-xs">{formatDate(selectedUser.verification_details.submitted_at)}</p>
+                                </div>
+                                {selectedUser.verification_details.reviewed_at && (
+                                  <div>
+                                    <Label className="text-muted-foreground text-xs">Reviewed</Label>
+                                    <p className="font-medium mt-1 text-xs">{formatDate(selectedUser.verification_details.reviewed_at)}</p>
+                                  </div>
+                                )}
+                              </div>
+                              {selectedUser.verification_details.admin_notes && (
+                                <div>
+                                  <Label className="text-muted-foreground text-xs">Admin Notes</Label>
+                                  <Textarea
+                                    value={selectedUser.verification_details.admin_notes}
+                                    readOnly
+                                    className="mt-1 min-h-16 bg-muted/20 text-sm"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 border-2 border-dashed rounded-lg text-muted-foreground">
+                              <FileText className="h-8 w-8 mx-auto mb-2" />
+                              <p className="text-sm">No verification submitted</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* Right Column - Timeline & System Info */}
+                  <div className="space-y-4">
+                    {/* Activity Timeline */}
+                    <Card className="border">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-primary" />
+                          Activity Timeline
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="space-y-4">
+                          <div className="flex gap-3">
+                            <div className="w-2 h-2 bg-primary rounded-full mt-1.5" />
+                            <div>
+                              <p className="font-medium text-xs">Account Created</p>
+                              <p className="text-xs text-muted-foreground">{formatDate(selectedUser.date_joined)}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-3">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5" />
+                            <div>
+                              <p className="font-medium text-xs">Last Updated</p>
+                              <p className="text-xs text-muted-foreground">{formatDate(selectedUser.updated_at)}</p>
+                            </div>
+                          </div>
+                          {selectedUser.last_login && (
+                            <div className="flex gap-3">
+                              <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5" />
+                              <div>
+                                <p className="font-medium text-xs">Last Login</p>
+                                <p className="text-xs text-muted-foreground">{formatDate(selectedUser.last_login)}</p>
+                              </div>
+                            </div>
+                          )}
+                          {selectedUser.role === 'seller' && selectedUser.verification_details && (
+                            <div className="flex gap-3">
+                              <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5" />
+                              <div>
+                                <p className="font-medium text-xs">Verification {selectedUser.verification_details.status}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDate(selectedUser.verification_details.reviewed_at || selectedUser.verification_details.submitted_at)}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* System Info */}
+                    <Card className="border">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-primary" />
+                          System Information
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">User ID</span>
+                          <code className="font-mono">{selectedUser.id}</code>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Created</span>
+                          <span>{formatDate(selectedUser.created_at)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Updated</span>
+                          <span>{formatDate(selectedUser.updated_at)}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}   

@@ -12,8 +12,15 @@ import { useToast } from "@/hooks/use-toast"
 import { propertiesApi } from "@/lib/api/properties"
 import type { Property } from "@/types/property"
 import { PROPERTY_TYPES } from "@/lib/constants"
-import { ArrowLeft, Loader2, Upload, X } from "lucide-react"
+import { ArrowLeft, Loader2, Upload, X, Star } from "lucide-react"
 import Link from "next/link"
+
+interface PropertyImage {
+  id: string;
+  url: string;
+  order: number;
+  is_primary: boolean;
+}
 
 export default function EditPropertyPage() {
   const params = useParams()
@@ -21,8 +28,9 @@ export default function EditPropertyPage() {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [images, setImages] = useState<File[]>([])
-  const [existingImages, setExistingImages] = useState<any[]>([])
+  const [newImages, setNewImages] = useState<{file: File, is_primary: boolean}[]>([])
+  const [existingImages, setExistingImages] = useState<PropertyImage[]>([]) 
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -36,7 +44,9 @@ export default function EditPropertyPage() {
   })
 
   useEffect(() => {
-    loadProperty()
+    if (params.id) {
+      loadProperty()
+    }
   }, [params.id])
 
   const loadProperty = async () => {
@@ -70,9 +80,32 @@ export default function EditPropertyPage() {
     }
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const setPrimaryImage = async (imageId: string) => {
+    try {
+      await propertiesApi.setPrimaryImage(params.id as string, imageId)
+      toast({
+        title: "Success",
+        description: "Primary image updated successfully",
+      })
+      // Refresh the images to show the new primary status
+      await loadProperty()
+    } catch (error) {
+      console.error("Failed to set primary image:", error)
+      toast({
+        title: "Error",
+        description: "Failed to set primary image. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const removeNewImage = (index: number) => {
+    setNewImages(newImages.filter((_, i) => i !== index))
+  }
+
+  const handleNewImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
-    if (existingImages.length + images.length + files.length > 10) {
+    if (existingImages.length + newImages.length + files.length > 10) {
       toast({
         title: "Too many images",
         description: "You can upload a maximum of 10 images",
@@ -80,17 +113,19 @@ export default function EditPropertyPage() {
       })
       return
     }
-    setImages([...images, ...files])
+
+    const newImageFiles = files.map(file => ({
+      file,
+      is_primary: existingImages.length === 0 && newImages.length === 0
+    }))
+
+    setNewImages([...newImages, ...newImageFiles])
   }
 
-  const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index))
-  }
-
-  const removeExistingImage = async (imageId: string, index: number) => {
+  const removeExistingImage = async (imageId: string) => {
     try {
       await propertiesApi.deletePropertyImage(imageId)
-      setExistingImages(existingImages.filter((_, i) => i !== index))
+      setExistingImages(existingImages.filter(img => img.id !== imageId))
       toast({
         title: "Success",
         description: "Image removed successfully",
@@ -120,7 +155,7 @@ export default function EditPropertyPage() {
     try {
       setIsSubmitting(true)
       
-      // Update the property using your new method
+      // Update the property
       await propertiesApi.updateProperty(params.id as string, {
         name: formData.name,
         description: formData.description,
@@ -134,10 +169,8 @@ export default function EditPropertyPage() {
       })
 
       // Upload new images if any
-      if (images.length > 0) {
-        for (const image of images) {
-          await propertiesApi.uploadPropertyImage(params.id as string, image)
-        }
+      for (const imageData of newImages) {
+        await propertiesApi.uploadPropertyImage(params.id as string, imageData.file, imageData.is_primary)
       }
 
       toast({
@@ -182,6 +215,7 @@ export default function EditPropertyPage() {
 
       <form onSubmit={handleSubmit}>
         <div className="space-y-6">
+          {/* Basic Information */}
           <Card className="border-2">
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
@@ -193,60 +227,58 @@ export default function EditPropertyPage() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Modern Downtown Loft"
+                  placeholder="Modern Apartment in City Center"
                   required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description *</Label>
+                <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Describe your property..."
                   rows={4}
-                  required
                 />
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="property_type">Property Type *</Label>
-                  <Select
-                    value={formData.property_type}
-                    onValueChange={(value: string) => setFormData({ ...formData, property_type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROPERTY_TYPES.map((type) => (
-                        <SelectItem key={type} value={type} className="capitalize">
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="property_type">Property Type *</Label>
+                <Select
+                  value={formData.property_type}
+                  onValueChange={(value: string) => setFormData({ ...formData, property_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                 <SelectContent>
+  {PROPERTY_TYPES.map((type) => (
+    <SelectItem key={type} value={type}>
+      {type.charAt(0).toUpperCase() + type.slice(1)}
+    </SelectItem>
+  ))}
+</SelectContent>
+                </Select>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price (€) *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.price || ""}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                    placeholder="450000.00"
-                    required
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="price">Price (€) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.price || ""}
+                  onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                  placeholder="150000.00"
+                  required
+                />
               </div>
             </CardContent>
           </Card>
 
+          {/* Location */}
           <Card className="border-2">
             <CardHeader>
               <CardTitle>Location</CardTitle>
@@ -276,6 +308,7 @@ export default function EditPropertyPage() {
             </CardContent>
           </Card>
 
+          {/* Property Details */}
           <Card className="border-2">
             <CardHeader>
               <CardTitle>Property Details</CardTitle>
@@ -327,6 +360,7 @@ export default function EditPropertyPage() {
             </CardContent>
           </Card>
 
+          {/* Images Section */}
           <Card className="border-2">
             <CardHeader>
               <CardTitle>Images</CardTitle>
@@ -339,9 +373,12 @@ export default function EditPropertyPage() {
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={handleImageChange}
+                  onChange={handleNewImageChange}
                   className="cursor-pointer"
                 />
+                <p className="text-sm text-muted-foreground">
+                  {existingImages.length + newImages.length}/10 images uploaded
+                </p>
               </div>
 
               {/* Existing Images */}
@@ -353,41 +390,89 @@ export default function EditPropertyPage() {
                       <div key={image.id} className="relative group">
                         <img
                           src={image.url || "/placeholder.svg"}
-                          alt={`Current image ${index + 1}`}
+                          alt={`Property image ${index + 1}`}
                           className="w-full h-32 object-cover rounded-lg border-2"
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeExistingImage(image.id, index)}
-                          className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                        
+                        {/* Primary Image Badge */}
+                        {image.is_primary && (
+                          <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-current" />
+                            Primary
+                          </div>
+                        )}
+                        
+                        {/* Action Buttons */}
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Set as Primary Button - Only show if not already primary */}
+                          {!image.is_primary && (
+                            <button
+                              type="button"
+                              onClick={() => setPrimaryImage(image.id)}
+                              className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700 transition-colors"
+                              title="Set as primary image"
+                            >
+                              <Star className="h-3 w-3" />
+                            </button>
+                          )}
+                          
+                          {/* Remove Image Button */}
+                          <button
+                            type="button"
+                            onClick={() => removeExistingImage(image.id)}
+                            className="bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
+                            title="Remove image"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        
+                        {/* Image Info */}
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs p-1 rounded text-center">
+                          {image.is_primary ? "Primary Image" : `Image ${index + 1}`}
+                        </div>
                       </div>
                     ))}
+                  </div>
+                  
+                  {/* Primary Image Instructions */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Star className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-medium text-blue-900 mb-1">Primary Image</h4>
+                        <p className="text-blue-700 text-sm">
+                          The primary image will be featured as the main photo in property listings and search results. 
+                          Click the star icon on any image to set it as primary.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* New Images */}
-              {images.length > 0 && (
+              {/* New Images to Upload */}
+              {newImages.length > 0 && (
                 <div className="space-y-3">
                   <Label>New Images to Upload</Label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {images.map((image, index) => (
+                    {newImages.map((image, index) => (
                       <div key={index} className="relative group">
                         <img
-                          src={URL.createObjectURL(image) || "/placeholder.svg"}
+                          src={URL.createObjectURL(image.file) || "/placeholder.svg"}
                           alt={`Preview ${index + 1}`}
                           className="w-full h-32 object-cover rounded-lg border-2"
                         />
                         <button
                           type="button"
-                          onClick={() => removeImage(index)}
+                          onClick={() => removeNewImage(index)}
                           className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X className="h-4 w-4" />
                         </button>
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs p-1 rounded text-center">
+                          New Image
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -414,7 +499,8 @@ export default function EditPropertyPage() {
               <Link href="/dashboard">Cancel</Link>
             </Button>
           </div>
-        </div><AutoLogout />
+        </div>
+        <AutoLogout />
       </form>
     </div>
   )

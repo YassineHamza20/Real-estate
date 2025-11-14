@@ -12,7 +12,7 @@ import { usersApi } from "@/lib/api/users"
 import type { Property } from "@/types/property"
 import {
   MapPin, Bed, Square, Calendar, Heart, Share2, ArrowLeft,
-  Phone, Mail, User, Check, ChevronLeft, ChevronRight
+  Phone, Mail, User, Check, ChevronLeft, ChevronRight, Star
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Footer } from "@/components/footer"
@@ -73,11 +73,19 @@ export default function PropertyDetailPage() {
   }, [user, property])
 
   /* ------------------------------------------------- */
+  // Sort images to show primary first
+  const sortedImages = property?.images ? [...property.images].sort((a, b) => {
+    // Primary images come first
+    if (a.is_primary && !b.is_primary) return -1
+    if (!a.is_primary && b.is_primary) return 1
+    return 0
+  }) : []
+
   const fmtPrice = (p: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(p)
   const fmtSqm = (s: number) => new Intl.NumberFormat("de-DE").format(s)
 
-  const totalImages = property?.images.length || 0
+  const totalImages = sortedImages.length
 
   const goToPrev = () => {
     setCurrentImg((prev) => (prev === 0 ? totalImages - 1 : prev - 1))
@@ -183,11 +191,19 @@ export default function PropertyDetailPage() {
                     className="absolute inset-0"
                   >
                     <Image
-                      src={property.images[currentImg]?.url ?? "/placeholder.svg"}
+                      src={sortedImages[currentImg]?.url ?? "/placeholder.svg"}
                       alt={`${property.name} - Image ${currentImg + 1}`}
                       fill
                       className="object-cover"
                     />
+                    
+                    {/* Primary Image Badge */}
+                    {sortedImages[currentImg]?.is_primary && (
+                      <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 backdrop-blur-md">
+                        <Star className="h-4 w-4 fill-current" />
+                        Primary
+                      </div>
+                    )}
                   </motion.div>
                 </AnimatePresence>
 
@@ -243,7 +259,7 @@ export default function PropertyDetailPage() {
               {/* Thumbnails */}
               {totalImages > 1 && (
                 <div className="flex gap-3 p-4 overflow-x-auto bg-card/80 backdrop-blur scrollbar-hide">
-                  {property.images.map((img, i) => (
+                  {sortedImages.map((img, i) => (
                     <motion.button
                       key={img.id}
                       whileHover={{ scale: 1.1 }}
@@ -257,6 +273,13 @@ export default function PropertyDetailPage() {
                       )}
                     >
                       <Image src={img.url ?? "/placeholder.svg"} alt="" fill className="object-cover" />
+                      
+                      {/* Primary Badge on Thumbnail */}
+                      {img.is_primary && (
+                        <div className="absolute top-1 right-1 bg-blue-600 text-white p-1 rounded-full">
+                          <Star className="h-3 w-3 fill-current" />
+                        </div>
+                      )}
                     </motion.button>
                   ))}
                 </div>
@@ -443,21 +466,6 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       </div>
-
-      {/* Floating Save Orb */}
-      {/* <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        className="fixed bottom-8 right-8 z-50"
-      >
-        <Button
-          size="icon"
-          className="w-16 h-16 rounded-full shadow-2xl bg-gradient-to-r from-primary to-accent text-white hover:scale-110 transition-all"
-          onClick={handleSave}
-        >
-          <Heart className={cn("h-8 w-8", isSaved && "fill-current")} />
-        </Button>
-      </motion.div> */}
 
       <Footer />
     </div>

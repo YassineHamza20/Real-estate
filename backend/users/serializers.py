@@ -277,16 +277,17 @@ class AdminUserSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
-        return None
-
+        return None 
+    
 class AdminUserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True)
+    email_verified = serializers.BooleanField(default=False, required=False)
 
     class Meta:
         model = User
         fields = ('username', 'email', 'password', 'password_confirm', 'first_name', 
-                 'last_name', 'role', 'phone_number', 'is_active', 'is_staff')
+                 'last_name', 'role', 'phone_number', 'is_active', 'is_staff', 'email_verified')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
@@ -296,10 +297,17 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        
+        # Extract email_verified if provided, default to False
+        email_verified = validated_data.pop('email_verified', False)
+        
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
+        user.email_verified = email_verified  # Set the email verification status
         user.save()
+        
         return user
+
 
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
     class Meta:

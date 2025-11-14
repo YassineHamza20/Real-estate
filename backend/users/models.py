@@ -53,3 +53,10 @@ class SellerVerification(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.status}"
+    
+
+# Add date_joined property for compatibility
+    @property
+    def date_joined(self):
+        """Compatibility property - use created_at"""
+        return self.created_at

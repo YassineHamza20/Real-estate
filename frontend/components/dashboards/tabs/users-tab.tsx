@@ -7,11 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/auth-context"
+ 
+import { usersApi } from '@/lib/api/users'; // Adjust the path as needed
 import { Separator } from "@/components/ui/separator"
 import { 
   Users, Home, DollarSign, TrendingUp, Search, MoreVertical, 
   CheckCircle, XCircle, Loader2, Plus, RefreshCw, Shield, 
-  UserCheck, UserX, Mail, Phone, Calendar, Edit, Save, X,
+  UserCheck, UserX, Mail, Phone, Trash2,Calendar, Edit, Save, X,
   Eye, Shield as StaffIcon, Verified, Clock, User,
   FileText
 } from "lucide-react"
@@ -30,7 +32,7 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
+  DialogDescription,DialogTrigger, 
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -166,17 +168,68 @@ export function UsersTab() {
     userDetail: false
   })
   const [roleFilter, setRoleFilter] = useState<string>("all")
-  
+   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false)
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [createUserForm, setCreateUserForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+    password_confirm: '',
+    first_name: '',
+    last_name: '',
+    role: 'buyer' as 'buyer' | 'seller' | 'admin',
+    phone_number: '',
+    is_active: true,
+    is_staff: false,
+    email_verified: false
+  })
+
   // User detail modal state
   const [selectedUser, setSelectedUser] = useState<UserFullDetail | null>(null)
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<User>>({})
   const [saving, setSaving] = useState(false)
-
+// Add this to your existing state
+const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+const [userToDelete, setUserToDelete] = useState<{id: number; username: string} | null>(null)
   // Get token from localStorage as fallback
   const token = authToken || localStorage.getItem('access_token')
-
+ const handleCreateUser = async () => {
+    if (!token) return
+    
+    setCreatingUser(true)
+    try {
+      const result = await usersApi.createUser(createUserForm)
+      toast({
+        title: "Success",
+        description: "User created successfully",
+      })
+      setIsCreateUserOpen(false)
+      setCreateUserForm({
+        username: '',
+        email: '',
+        password: '',
+        password_confirm: '',
+        first_name: '',
+        last_name: '',
+        role: 'buyer',
+        phone_number: '',
+        is_active: true,
+        is_staff: false,
+        email_verified: false
+      })
+      fetchUsers() // Refresh the users list
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      })
+    } finally {
+      setCreatingUser(false)
+    }
+  }
   // Fetch users
   const fetchUsers = useCallback(async () => {
     if (!token) return
@@ -304,6 +357,8 @@ export function UsersTab() {
     })
   }
 
+
+
   const formatRelativeTime = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -386,6 +441,57 @@ export function UsersTab() {
     )
   }
 
+const handleDeleteClick = (userId: number, username: string) => {
+  setUserToDelete({ id: userId, username })
+  setDeleteConfirmOpen(true)
+}
+
+const handleConfirmDelete = async () => {
+  if (!userToDelete || !token) return
+  
+  try {
+    await usersApi.deleteUser(userToDelete.id)
+    toast({
+      title: "Success",
+      description: `User "${userToDelete.username}" has been deleted successfully`,
+    })
+    fetchUsers()
+    setIsUserDetailOpen(false)
+  } catch (error: any) {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to delete user",
+      variant: "destructive",
+    })
+  } finally {
+    setDeleteConfirmOpen(false)
+    setUserToDelete(null)
+  }
+}
+const handleDeleteUser = async (userId: number, username: string) => {
+  if (!token) return
+  
+  if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+    return
+  }
+
+  try {
+    await usersApi.deleteUser(userId)
+    toast({
+      title: "Success",
+      description: `User "${username}" has been deleted successfully`,
+    })
+    fetchUsers()
+    setIsUserDetailOpen(false)
+  } catch (error: any) {
+    toast({
+      title: "Error",
+      description: error.message || "Failed to delete user",
+      variant: "destructive",
+    })
+  }
+}
+   
   return (
     <div className="container mx-auto px-0 py-1 max-w-7xl">
       
@@ -449,6 +555,8 @@ export function UsersTab() {
         ))}
       </div>
 
+
+
       {/* Users Tab */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
        
@@ -457,11 +565,13 @@ export function UsersTab() {
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold">User Management</h2>
+              
               <p className="text-muted-foreground">
                 {users.length} user{users.length !== 1 ? 's' : ''} found
                 {roleFilter !== 'all' && ` (filtered by ${roleFilter})`}
               </p>
             </div>
+            
             <div className="flex gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-initial">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -486,6 +596,181 @@ export function UsersTab() {
               <Button onClick={fetchUsers} variant="outline" size="icon">
                 <RefreshCw className="h-4 w-4" />
               </Button>
+
+
+              {/* ADD THE CREATE USER BUTTON HERE */}
+        <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add User
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New User</DialogTitle>
+              <DialogDescription>
+                Add a new user to the platform. All fields are required.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="first_name">First Name</Label>
+                  <Input
+                    id="first_name"
+                    value={createUserForm.first_name}
+                    onChange={(e) => setCreateUserForm({...createUserForm, first_name: e.target.value})}
+                    placeholder="Enter first name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="last_name">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    value={createUserForm.last_name}
+                    onChange={(e) => setCreateUserForm({...createUserForm, last_name: e.target.value})}
+                    placeholder="Enter last name"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={createUserForm.username}
+                  onChange={(e) => setCreateUserForm({...createUserForm, username: e.target.value})}
+                  placeholder="Enter username"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={createUserForm.email}
+                  onChange={(e) => setCreateUserForm({...createUserForm, email: e.target.value})}
+                  placeholder="Enter email address"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone_number">Phone Number</Label>
+                <Input
+                  id="phone_number"
+                  value={createUserForm.phone_number}
+                  onChange={(e) => setCreateUserForm({...createUserForm, phone_number: e.target.value})}
+                  placeholder="Enter phone number"
+                />
+              </div>
+
+              {/* Password Fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={createUserForm.password}
+                    onChange={(e) => setCreateUserForm({...createUserForm, password: e.target.value})}
+                    placeholder="Enter password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password_confirm">Confirm Password</Label>
+                  <Input
+                    id="password_confirm"
+                    type="password"
+                    value={createUserForm.password_confirm}
+                    onChange={(e) => setCreateUserForm({...createUserForm, password_confirm: e.target.value})}
+                    placeholder="Confirm password"
+                  />
+                </div>
+              </div>
+
+              {/* Role and Settings */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select 
+                    value={createUserForm.role} 
+                    onValueChange={(value: 'buyer' | 'seller' | 'admin') => 
+                      setCreateUserForm({...createUserForm, role: value})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="buyer">Buyer</SelectItem>
+                      <SelectItem value="seller">Seller</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone_number">Account Settings</Label>
+                  <div className="space-y-3 p-3 border rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="is_active" className="text-sm cursor-pointer">Active</Label>
+                      <Switch
+                        id="is_active"
+                        checked={createUserForm.is_active}
+                        onCheckedChange={(checked) => setCreateUserForm({...createUserForm, is_active: checked})}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="is_staff" className="text-sm cursor-pointer">Staff</Label>
+                      <Switch
+                        id="is_staff"
+                        checked={createUserForm.is_staff}
+                        onCheckedChange={(checked) => setCreateUserForm({...createUserForm, is_staff: checked})}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="email_verified" className="text-sm cursor-pointer">Email Verified</Label>
+                      <Switch
+                        id="email_verified"
+                        checked={createUserForm.email_verified}
+                        onCheckedChange={(checked) => setCreateUserForm({...createUserForm, email_verified: checked})}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsCreateUserOpen(false)}
+                disabled={creatingUser}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreateUser}
+                disabled={creatingUser || !createUserForm.password || !createUserForm.password_confirm}
+              >
+                {creatingUser ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create User
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
             </div>
           </div>
 
@@ -620,8 +905,8 @@ export function UsersTab() {
                                 className="text-destructive"
                                 onClick={() => handleUserAction(user.id, 'delete')}
                               >
-                                <XCircle className="h-4 w-4 mr-2" />
-                                Delete User
+                                
+                              
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -632,6 +917,7 @@ export function UsersTab() {
                 </TableBody>
               </Table>
             </CardContent>
+            
           </Card>
         </TabsContent>
       </Tabs>
@@ -690,29 +976,87 @@ export function UsersTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {isEditing ? (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
-                          <X className="h-4 w-4 mr-1" /> Cancel
-                        </Button>
-                        <Button size="sm" onClick={handleSaveUser} disabled={saving}>
-                          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                          Save
-                        </Button>
-                      </>
-                    ) : (
-                      <Button size="sm" onClick={() => setIsEditing(true)}>
-                        <Edit className="h-4 w-4 mr-1" /> Edit
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIsUserDetailOpen(false)}
-                      className="rounded-full h-8 w-8"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+   {isEditing ? (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+        <X className="h-4 w-4 mr-1" /> Cancel
+      </Button>
+      <Button size="sm" onClick={handleSaveUser} disabled={saving}>
+        {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+        Save
+      </Button>
+    </>
+  ) : (
+    <>
+      <Button size="sm" onClick={() => setIsEditing(true)}>
+        <Edit className="h-4 w-4 mr-1" /> Edit
+      </Button>
+      
+      {/* UPDATED DELETE BUTTON */}
+      <Button 
+        variant="destructive" 
+        size="sm"
+        onClick={() => selectedUser && handleDeleteClick(selectedUser.id, selectedUser.username)}
+      >
+        <Trash2 className="h-4 w-4 mr-1" /> Delete
+      </Button>
+    </>
+  )}
+  <Button
+    variant="ghost"
+    size="icon"
+    onClick={() => setIsUserDetailOpen(false)}
+    className="rounded-full h-8 w-8"
+  >
+    <X className="h-4 w-4" />
+  </Button>
+ {/* Beautiful Delete Confirmation Dialog */}
+<Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+  <DialogContent className="sm:max-w-md">
+    <div className="flex flex-col items-center text-center">
+      {/* Warning Icon */}
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 mb-4">
+        <Trash2 className="h-6 w-6 text-red-600" />
+      </div>
+      
+      <DialogHeader>
+        <DialogTitle className="text-lg font-semibold">Delete User</DialogTitle>
+        <DialogDescription className="text-sm text-muted-foreground mt-2">
+          Are you sure you want to delete <span className="font-semibold text-foreground">"{userToDelete?.username}"</span>? 
+          This action cannot be undone and all user data will be permanently removed.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="flex gap-3 w-full mt-6">
+        <Button
+          variant="outline"
+          onClick={() => setDeleteConfirmOpen(false)}
+          className="flex-1"
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={handleConfirmDelete}
+          className="flex-1 gap-2"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete User
+        </Button>
+      </div>
+
+      {/* Warning Note */}
+      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 w-full">
+        <div className="flex items-start gap-2">
+          <svg className="h-4 w-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>This will permanently remove the user account and all associated data.</span>
+        </div>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
                   </div>
                 </div>
               </div>

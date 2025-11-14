@@ -30,6 +30,7 @@ export interface PropertyImage {
   url: string
   caption?: string
   order: number
+   is_primary: boolean
 }
 
 export interface PropertyFormData {

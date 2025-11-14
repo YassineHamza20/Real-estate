@@ -1,6 +1,6 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 
-export const PROPERTY_TYPES = ["house", "apartment",    ,"villa", "land", "commercial"] as const
+export const PROPERTY_TYPES = ["house", "apartment","villa", "land", "commercial"] as const
 
  
 

@@ -228,4 +228,82 @@ async updateProfile(profileData: any, profilePicture?: File): Promise<UserProfil
       return { message: 'Document deleted' };
     }
   },
+
+  async createUser(userData: {
+    username: string;
+    email: string;
+    password: string;
+    password_confirm: string;
+    first_name: string;
+    last_name: string;
+    role: 'buyer' | 'seller' | 'admin';
+    phone_number: string;
+    is_active: boolean;
+    is_staff: boolean;
+    email_verified: boolean;
+  }): Promise<any> {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token');
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/users/admin/create-user/`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    });
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to create user';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.detail || errorData.error || errorMessage;
+        
+        // Handle field-specific errors
+        if (errorData.username) errorMessage = `Username: ${errorData.username[0]}`;
+        else if (errorData.email) errorMessage = `Email: ${errorData.email[0]}`;
+        else if (errorData.password) errorMessage = `Password: ${errorData.password[0]}`;
+        
+      } catch (e) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  },
+
+
+async deleteUser(userId: number): Promise<any> {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token');
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/users/admin/users/${userId}/delete/`, {
+      method: 'DELETE',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to delete user';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.detail || errorMessage;
+      } catch (e) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  },
+
+
 }

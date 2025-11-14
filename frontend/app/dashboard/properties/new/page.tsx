@@ -11,14 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { propertiesApi } from "@/lib/api/properties"
 import { PROPERTY_TYPES } from "@/lib/constants"
-import { ArrowLeft, Loader2, Upload, X } from "lucide-react"
+import { ArrowLeft, Loader2, Upload, X, Star } from "lucide-react"
 import Link from "next/link"
+
+interface ImageWithMetadata {
+  file: File
+  is_primary: boolean
+}
 
 export default function NewPropertyPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [images, setImages] = useState<File[]>([])
+  const [images, setImages] = useState<ImageWithMetadata[]>([])
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -41,47 +46,75 @@ export default function NewPropertyPage() {
       })
       return
     }
-    setImages([...images, ...files])
+
+    const newImages: ImageWithMetadata[] = files.map(file => ({
+      file,
+      is_primary: images.length === 0 && files.indexOf(file) === 0 // First image becomes primary by default
+    }))
+
+    setImages([...images, ...newImages])
   }
 
   const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index))
+    const newImages = images.filter((_, i) => i !== index)
+    
+    // If we removed the primary image and there are other images, set the first one as primary
+    if (images[index].is_primary && newImages.length > 0) {
+      newImages[0].is_primary = true
+    }
+    
+    setImages(newImages)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!formData.name || !formData.address || !formData.city || !formData.price) {
-      toast({
-        title: "Missing required fields",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setIsSubmitting(true)
-      
-      // Create the property with images
-      await propertiesApi.createProperty(formData, images)
-
-      toast({
-        title: "Success",
-        description: "Property created successfully",
-      })
-      router.push("/dashboard")
-    } catch (error: any) {
-      console.error("[v0] Failed to create property:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create property. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+  const setPrimaryImage = (index: number) => {
+    const newImages = images.map((image, i) => ({
+      ...image,
+      is_primary: i === index
+    }))
+    setImages(newImages)
   }
+
+// In your NewPropertyPage component
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+
+  if (!formData.name || !formData.address || !formData.city || !formData.price) {
+    toast({
+      title: "Missing required fields",
+      description: "Please fill in all required fields",
+      variant: "destructive",
+    })
+    return
+  }
+
+  try {
+    setIsSubmitting(true)
+    
+    // Transform images to include primary information
+    const imagesWithMetadata = images.map((image, index) => ({
+      file: image.file,
+      is_primary: image.is_primary
+    }))
+    
+    // Create the property with images
+    await propertiesApi.createProperty(formData, imagesWithMetadata)
+
+    toast({
+      title: "Success",
+      description: "Property created successfully",
+    })
+    router.push("/dashboard")
+  } catch (error: any) {
+    console.error("[v0] Failed to create property:", error)
+    toast({
+      title: "Error",
+      description: error.message || "Failed to create property. Please try again.",
+      variant: "destructive",
+    })
+  } finally {
+    setIsSubmitting(false)
+  }
+}
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -259,7 +292,7 @@ export default function NewPropertyPage() {
                   className="cursor-pointer"
                 />
                 <p className="text-sm text-muted-foreground">
-                  Upload up to 10 images of your property
+                  Upload up to 10 images of your property. The first image will be set as primary by default.
                 </p>
               </div>
 
@@ -271,19 +304,64 @@ export default function NewPropertyPage() {
                     {images.map((image, index) => (
                       <div key={index} className="relative group">
                         <img
-                          src={URL.createObjectURL(image) || "/placeholder.svg"}
+                          src={URL.createObjectURL(image.file) || "/placeholder.svg"}
                           alt={`Preview ${index + 1}`}
                           className="w-full h-32 object-cover rounded-lg border-2"
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                        
+                        {/* Primary Image Badge */}
+                        {image.is_primary && (
+                          <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-current" />
+                            Primary
+                          </div>
+                        )}
+                        
+                        {/* Action Buttons */}
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Set as Primary Button */}
+                          {!image.is_primary && (
+                            <button
+                              type="button"
+                              onClick={() => setPrimaryImage(index)}
+                              className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700 transition-colors"
+                              title="Set as primary image"
+                            >
+                              <Star className="h-3 w-3" />
+                            </button>
+                          )}
+                          
+                          {/* Remove Image Button */}
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
+                            title="Remove image"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        
+                        {/* Image Info */}
+                        <div className="absolute bottom-2 left-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs p-1 rounded text-center">
+                          {image.is_primary ? "Primary Image" : `Image ${index + 1}`}
+                        </div>
                       </div>
                     ))}
+                  </div>
+                  
+                  {/* Primary Image Instructions */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Star className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-medium text-blue-900 mb-1">Primary Image</h4>
+                        <p className="text-blue-700 text-sm">
+                          The primary image will be featured as the main photo in property listings and search results. 
+                          Choose your best photo that represents the property well.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

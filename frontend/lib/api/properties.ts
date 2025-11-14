@@ -16,10 +16,10 @@ interface WishlistResponse {
   action: string;
 }
 
-// Helper function for image transformation
-function transformImages(images: any[]): { id: string; url: string; order: number }[] {
+ // Helper function for image transformation
+function transformImages(images: any[]): { id: string; url: string; order: number; is_primary: boolean }[] {
   if (!images || images.length === 0) {
-    return [{ id: '1', url: '/placeholder-property.jpg', order: 0 }]
+    return [{ id: '1', url: '/placeholder-property.jpg', order: 0, is_primary: false }]
   }
 
   return images.map((img: any, index: number) => {
@@ -44,6 +44,7 @@ function transformImages(images: any[]): { id: string; url: string; order: numbe
       id: img.id?.toString() || index.toString(),
       url: imageUrl,
       order: img.order || index,
+      is_primary: img.is_primary || false // Add this line
     }
   })
 }
@@ -176,117 +177,129 @@ export const propertiesApi = {
     }
   },
 
-  async uploadPropertyImages(propertyId: string, images: File[], token: string): Promise<void> {
-    try {
-      for (const image of images) {
-        const formData = new FormData()
-        formData.append('image', image)
-        
-        const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/images/`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formData,
-        })
-        
-        if (!response.ok) {
-          console.error(`Failed to upload image: ${response.statusText}`)
-          continue
-        }
-        
-        console.log('Image uploaded successfully')
-      }
-    } catch (error) {
-      console.error('Error uploading images:', error)
+ // lib/api/properties.ts - Update the uploadPropertyImage method
+async uploadPropertyImage(propertyId: string, image: File, isPrimary: boolean = false): Promise<any> {
+  try {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      throw new Error('Not authenticated')
     }
-  },
 
-  async createProperty(data: any, images: File[] = []): Promise<Property> {
-    try {
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        throw new Error('Not authenticated')
-      }
+    const formData = new FormData()
+    formData.append('image', image)
+    formData.append('is_primary', isPrimary.toString()) // Add this line
 
-      console.log('Creating property with data:', data)
-      console.log('Images to upload:', images.length)
-
-      // Step 1: Create the property first
-      const propertyResponse = await fetch(`${API_BASE_URL}/properties/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: data.name,
-          description: data.description,
-          address: data.address,
-          city: data.city,
-          price: data.price.toString(),
-          number_of_rooms: data.number_of_rooms,
-          size: data.size.toString(),
-          property_type: data.property_type,
-          is_available: data.is_available,
-        }),
-      })
-      
-      const responseText = await propertyResponse.text()
-      console.log('Property creation response:', responseText)
-      
-      if (!propertyResponse.ok) {
-        console.error('API Error Response:', responseText)
-        throw new Error(`Failed to create property: ${propertyResponse.status} - ${responseText}`)
-      }
-      
-      // Parse the created property
-      const propertyData = JSON.parse(responseText)
-      console.log('Parsed property data:', propertyData)
-      
-      if (!propertyData.id) {
-        throw new Error('Property created but no ID returned from server')
-      }
-
-      const propertyId = propertyData.id.toString()
-      console.log('Created property ID:', propertyId)
-
-      // Step 2: Upload images if there are any
-      if (images.length > 0) {
-        console.log('Uploading images for property:', propertyId)
-        await this.uploadPropertyImages(propertyId, images, token)
-      } else {
-        console.log('No images to upload')
-      }
-
-      // Step 3: Return the transformed property data immediately
-      return {
-        id: propertyId,
-        name: propertyData.name || data.name,
-        description: propertyData.description || data.description,
-        address: propertyData.address || data.address,
-        city: propertyData.city || data.city,
-        price: safeParseFloat(propertyData.price) || data.price,
-        bedrooms: propertyData.number_of_rooms || data.number_of_rooms,
-        squareMeters: safeParseFloat(propertyData.size) || data.size,
-        type: propertyData.property_type || data.property_type,
-        status: 'active',
-        images: transformImages(propertyData.images || []),
-        seller: {
-          id: propertyData.seller?.toString() || 'unknown',
-          name: propertyData.seller_name || 'Current User',
-          email: propertyData.seller_email || '',
-          phone: propertyData.seller_phone || '',
-        },
-        createdAt: propertyData.created_at || new Date().toISOString(),
-        updatedAt: propertyData.updated_at || new Date().toISOString(),
-        inWishlist: propertyData.in_wishlist || false,
-      }
-    } catch (error) {
-      console.error('Error creating property:', error)
-      throw error
+    const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/images/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to upload image: ${response.statusText}`)
     }
-  },
+    
+    return response.json()
+  } catch (error) {
+    console.error('Error uploading property image:', error)
+    throw error
+  }
+},
+
+
+// lib/api/properties.ts - Update the createProperty method
+async createProperty(data: any, images: {file: File, is_primary: boolean}[] = []): Promise<Property> {
+  try {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+
+    console.log('Creating property with data:', data)
+    console.log('Images to upload:', images.length)
+
+    // Step 1: Create the property first
+    const propertyResponse = await fetch(`${API_BASE_URL}/properties/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description,
+        address: data.address,
+        city: data.city,
+        price: data.price.toString(),
+        number_of_rooms: data.number_of_rooms,
+        size: data.size.toString(),
+        property_type: data.property_type,
+        is_available: data.is_available,
+      }),
+    })
+    
+    const responseText = await propertyResponse.text()
+    console.log('Property creation response:', responseText)
+    
+    if (!propertyResponse.ok) {
+      console.error('API Error Response:', responseText)
+      throw new Error(`Failed to create property: ${propertyResponse.status} - ${responseText}`)
+    }
+    
+    // Parse the created property
+    const propertyData = JSON.parse(responseText)
+    console.log('Parsed property data:', propertyData)
+    
+    if (!propertyData.id) {
+      throw new Error('Property created but no ID returned from server')
+    }
+
+    const propertyId = propertyData.id.toString()
+    console.log('Created property ID:', propertyId)
+
+    // Step 2: Upload images if there are any
+    if (images.length > 0) {
+      console.log('Uploading images for property:', propertyId)
+      for (const imageData of images) {
+        await this.uploadPropertyImage(propertyId, imageData.file, imageData.is_primary)
+      }
+    } else {
+      console.log('No images to upload')
+    }
+
+    // Step 3: Return the transformed property data immediately
+    return {
+      id: propertyId,
+      name: propertyData.name || data.name,
+      description: propertyData.description || data.description,
+      address: propertyData.address || data.address,
+      city: propertyData.city || data.city,
+      price: safeParseFloat(propertyData.price) || data.price,
+      bedrooms: propertyData.number_of_rooms || data.number_of_rooms,
+      squareMeters: safeParseFloat(propertyData.size) || data.size,
+      type: propertyData.property_type || data.property_type,
+      status: 'active',
+      images: transformImages(propertyData.images || []),
+      seller: {
+        id: propertyData.seller?.toString() || 'unknown',
+        name: propertyData.seller_name || 'Current User',
+        email: propertyData.seller_email || '',
+        phone: propertyData.seller_phone || '',
+      },
+      createdAt: propertyData.created_at || new Date().toISOString(),
+      updatedAt: propertyData.updated_at || new Date().toISOString(),
+      inWishlist: propertyData.in_wishlist || false,
+    }
+  } catch (error) {
+    console.error('Error creating property:', error)
+    throw error
+  }
+}
+
+
+,
 
 
 
@@ -552,36 +565,8 @@ async getWishlist(): Promise<Property[]> {
 }
 
 
-,
-// Add these methods to your lib/api/properties.ts
-async uploadPropertyImage(propertyId: string, image: File): Promise<any> {
-  try {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      throw new Error('Not authenticated')
-    }
-
-    const formData = new FormData()
-    formData.append('image', image)
-
-    const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/images/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to upload image: ${response.statusText}`)
-    }
-    
-    return response.json()
-  } catch (error) {
-    console.error('Error uploading property image:', error)
-    throw error
-  }
-}, 
+, 
+ 
 
 async deletePropertyImage(imageId: string): Promise<void> {
   try {
@@ -607,6 +592,36 @@ async deletePropertyImage(imageId: string): Promise<void> {
     console.error('Error deleting property image:', error)
     throw error
   }
-}
+} 
+
 ,
+ // lib/api/properties.ts - Update the setPrimaryImage method
+async setPrimaryImage(propertyId: string, imageId: string): Promise<void> {
+  try {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      throw new Error('Not authenticated')
+    }
+
+    // Use the correct endpoint that matches your backend
+    const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/images/${imageId}/set_primary/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Set primary image failed:', errorText)
+      throw new Error(`Failed to set primary image: ${response.status} - ${response.statusText}`)
+    }
+    
+    return response.json()
+  } catch (error) {
+    console.error('Error setting primary image:', error)
+    throw error
+  }
+},
 }

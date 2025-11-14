@@ -1,7 +1,8 @@
 # users/urls.py
 from django.urls import path
 from . import views
-
+from .views import admin_create_user
+from .views import admin_delete_user
 urlpatterns = [
     # Authentication endpoints
     path('register/', views.register_user, name='register'),
@@ -32,4 +33,15 @@ urlpatterns = [
     path('admin/bulk-users/', views.admin_bulk_user_actions, name='admin-bulk-users'),
     path('admin/bulk-verifications/', views.admin_bulk_verification_actions, name='admin-bulk-verifications'),
     path('admin/users/<int:user_id>/full/', views.admin_user_full_detail, name='admin-user-full-detail'),
+    path('admin/verifications/stats/', views.admin_verifications_stats, name='admin-verifications-stats'),
+    path('admin/verifications/bulk-action/', views.admin_verifications_bulk_action, name='admin-verifications-bulk-action'),
+
+
+ 
+path('admin/analytics/', views.admin_analytics, name='admin-analytics'),
+path('admin/analytics/properties/', views.admin_property_analytics, name='admin-property-analytics'),
+path('admin/analytics/users/', views.admin_user_analytics, name='admin-user-analytics'),
+path('admin/create-user/', admin_create_user, name='admin_create_user'),
+  path('admin/users/<int:user_id>/delete/', admin_delete_user, name='admin_delete_user'),
+
 ]

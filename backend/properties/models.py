@@ -35,6 +35,9 @@ class Property(models.Model):
     def __str__(self):
         return f"{self.name} - {self.price} euros"
 
+
+
+# properties/models.py
 class PropertyImage(models.Model):
     property = models.ForeignKey(
         Property, 
@@ -47,6 +50,19 @@ class PropertyImage(models.Model):
     
     def __str__(self):
         return f"Image for {self.property.name}"
+
+    def save(self, *args, **kwargs):
+        # If this image is being set as primary, ensure no other primary exists
+        if self.is_primary:
+            # Use update() to avoid recursion and ensure atomic operation
+            PropertyImage.objects.filter(
+                property=self.property, 
+                is_primary=True
+            ).exclude(id=self.id).update(is_primary=False)
+        super().save(*args, **kwargs)
+    
+    class Meta:
+        ordering = ['-is_primary', 'uploaded_at']  # Primary images first, then by upload time
 
 # properties/models.py - Add this to existing models
 class Wishlist(models.Model):

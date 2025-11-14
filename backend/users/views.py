@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+
 from .models import User, SellerVerification
 from .serializers import (
     UserRegistrationSerializer, 
@@ -13,7 +14,7 @@ from .serializers import (
     PasswordResetRequestSerializer, 
     PasswordResetConfirmSerializer
 )
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny , IsAdminUser
 from django.contrib.auth.tokens import default_token_generator  
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str   
@@ -25,6 +26,14 @@ from .serializers import (
 )
 from django.db import models
 from django.utils import timezone
+from django.db.models import Count
+from .models import SellerVerification
+
+ 
+
+
+
+
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -623,3 +632,434 @@ def admin_user_full_detail(request, user_id):
         return Response(user_data)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+####admin verification
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_verifications_list(request):
+    status_filter = request.GET.get('status', 'all')
+    
+    queryset = SellerVerification.objects.select_related('user').all()
+    
+    if status_filter != 'all':
+        queryset = queryset.filter(status=status_filter)
+    
+    verifications = []
+    for verification in queryset:
+        # Build user data with proper fallbacks and correct field names
+        user_data = {
+            'id': verification.user.id,
+            'username': verification.user.username,
+            'email': verification.user.email,
+            'role': verification.user.role,
+            'profile_picture': verification.user.profile_picture.url if verification.user.profile_picture else None,
+            'profile_picture_url': verification.user.profile_picture.url if verification.user.profile_picture else None,
+            'phone_number': verification.user.phone_number or 'Not provided',
+            'created_at': verification.user.created_at.isoformat(),  # Use created_at
+            'date_joined': verification.user.created_at.isoformat(),  # Add date_joined for compatibility
+        }
+        
+        verifications.append({
+            'id': verification.id,
+            'user': user_data,
+            'document': verification.document.url if verification.document else None,
+            'status': verification.status,
+            'submitted_at': verification.submitted_at.isoformat(),
+            'reviewed_at': verification.reviewed_at.isoformat() if verification.reviewed_at else None,
+            'admin_notes': verification.admin_notes or '',
+        })
+    
+    return Response(verifications)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_verifications_stats(request):
+    stats = SellerVerification.objects.aggregate(
+        total_verifications=Count('id'),
+        pending_verifications=Count('id', filter=models.Q(status='pending')),
+        approved_verifications=Count('id', filter=models.Q(status='approved')),
+        rejected_verifications=Count('id', filter=models.Q(status='rejected')),
+    )
+    return Response(stats)
+
+@api_view(['PATCH'])
+@permission_classes([IsAdminUser])
+def admin_verification_detail(request, pk):
+    try:
+        verification = SellerVerification.objects.get(pk=pk)
+    except SellerVerification.DoesNotExist:
+        return Response({'detail': 'Verification not found'}, status=404)
+    
+    status = request.data.get('status')
+    admin_notes = request.data.get('admin_notes', '')
+    
+    if status and status in ['approved', 'rejected']:
+        verification.status = status
+        verification.reviewed_at = timezone.now()
+        verification.admin_notes = admin_notes
+        verification.save()
+        
+        # Update user role if approved
+        if status == 'approved':
+            verification.user.role = 'seller'
+            verification.user.save()
+    
+    return Response({
+        'id': verification.id,
+        'user': {
+            'id': verification.user.id,
+            'username': verification.user.username,
+            'email': verification.user.email,
+            'role': verification.user.role,
+        },
+        'status': verification.status,
+        'submitted_at': verification.submitted_at.isoformat(),
+        'reviewed_at': verification.reviewed_at.isoformat() if verification.reviewed_at else None,
+        'admin_notes': verification.admin_notes,
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def admin_verifications_bulk_action(request):
+    verification_ids = request.data.get('verification_ids', [])
+    action = request.data.get('action')  # 'approve' or 'reject'
+    
+    if not verification_ids or action not in ['approve', 'reject']:
+        return Response({'detail': 'Invalid request'}, status=400)
+    
+    verifications = SellerVerification.objects.filter(id__in=verification_ids)
+    updated_count = 0
+    
+    for verification in verifications:
+        if action == 'approve' and verification.status != 'approved':
+            verification.status = 'approved'
+            verification.user.role = 'seller'
+            verification.user.save()
+            updated_count += 1
+        elif action == 'reject' and verification.status != 'rejected':
+            verification.status = 'rejected'
+            updated_count += 1
+        
+        verification.reviewed_at = timezone.now()
+        verification.save()
+    
+    return Response({'detail': f'{updated_count} verifications updated'})
+
+
+
+
+# users/views.py - Add these analytics views
+from django.db.models import Count, Avg, Q, F
+from django.utils import timezone
+from datetime import timedelta
+from properties.models import Property, PropertyImage, Wishlist
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_analytics(request):
+    """Comprehensive analytics data for admin dashboard"""
+    try:
+        # Get time range from query params
+        time_range = request.GET.get('period', '30d')
+        
+        # Calculate date range
+        end_date = timezone.now()
+        if time_range == '7d':
+            start_date = end_date - timedelta(days=7)
+        elif time_range == '90d':
+            start_date = end_date - timedelta(days=90)
+        elif time_range == '1y':
+            start_date = end_date - timedelta(days=365)
+        else:  # 30d default
+            start_date = end_date - timedelta(days=30)
+
+        # User analytics
+        total_users = User.objects.count()
+        total_buyers = User.objects.filter(role=User.Role.BUYER).count()
+        total_sellers = User.objects.filter(role=User.Role.SELLER).count()
+        new_users = User.objects.filter(date_joined__gte=start_date).count()
+        
+        # Calculate user growth rate
+        previous_period_users = User.objects.filter(
+            date_joined__lt=start_date
+        ).count()
+        user_growth_rate = ((total_users - previous_period_users) / previous_period_users * 100) if previous_period_users > 0 else 0
+
+        # Property analytics
+        total_properties = Property.objects.count()
+        active_properties = Property.objects.filter(is_available=True).count()
+        new_properties = Property.objects.filter(created_at__gte=start_date).count()
+        
+        # Property views (you'll need to implement view tracking)
+        total_property_views = 0  # Placeholder - implement view tracking
+        
+        # Calculate conversion rate (inquiries/views)
+        conversion_rate = 0  # Placeholder - implement inquiry tracking
+        
+        # Revenue analytics (placeholder - implement your revenue logic)
+        total_revenue = 0
+        revenue_growth_rate = 0
+        
+        # Engagement analytics
+        total_wishlist_items = Wishlist.objects.count()
+        new_wishlist_items = Wishlist.objects.filter(created_at__gte=start_date).count()
+        
+        # User demographics
+        top_locations = Property.objects.values('city').annotate(
+            count=Count('id')
+        ).order_by('-count')[:5]
+        
+        # Top performing properties
+        top_properties = Property.objects.annotate(
+            wishlist_count=Count('wishlisted_by')
+        ).order_by('-wishlist_count')[:5]
+        
+        analytics_data = {
+            'period': f"Last {time_range}",
+            'userGrowth': {
+                'total': total_users,
+                'newUsers': new_users,
+                'growthRate': round(user_growth_rate, 1),
+                'trend': 'up' if user_growth_rate > 0 else 'down' if user_growth_rate < 0 else 'stable'
+            },
+            'propertyMetrics': {
+                'total': total_properties,
+                'active': active_properties,
+                'views': total_property_views,
+                'conversionRate': conversion_rate
+            },
+            'revenue': {
+                'total': total_revenue,
+                'projected': total_revenue * 1.1,  # Simple projection
+                'growthRate': revenue_growth_rate,
+                'trend': 'up' if revenue_growth_rate > 0 else 'down' if revenue_growth_rate < 0 else 'stable'
+            },
+            'engagement': {
+                'avgSessionDuration': 4.2,  # Placeholder - implement analytics
+                'bounceRate': 32.1,  # Placeholder
+                'wishlistAdds': total_wishlist_items,
+                'pageViews': total_property_views
+            },
+            'topProperties': [
+                {
+                    'id': str(prop.id),
+                    'name': prop.name,
+                    'views': prop.wishlist_count * 10,  # Estimate views from wishlists
+                    'wishlists': prop.wishlist_count,
+                    'inquiries': prop.wishlist_count // 2,  # Estimate inquiries
+                    'conversionRate': round((prop.wishlist_count // 2) / (prop.wishlist_count * 10) * 100, 1) if prop.wishlist_count > 0 else 0
+                }
+                for prop in top_properties
+            ],
+            'userDemographics': {
+                'buyers': total_buyers,
+                'sellers': total_sellers,
+                'verifiedSellers': SellerVerification.objects.filter(status='approved').count(),
+                'topLocations': [
+                    {
+                        'city': loc['city'],
+                        'users': loc['count'],
+                        'percentage': round((loc['count'] / total_properties) * 100, 1)
+                    }
+                    for loc in top_locations
+                ]
+            }
+        }
+        
+        return Response(analytics_data)
+        
+    except Exception as e:
+        print(f"Analytics error: {str(e)}")
+        return Response(
+            {'error': 'Failed to generate analytics data'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_property_analytics(request):
+    """Detailed property analytics"""
+    try:
+        # Property statistics
+        properties_by_type = Property.objects.values('property_type').annotate(
+            count=Count('id'),
+            avg_price=Avg('price'),
+            avg_size=Avg('size')
+        )
+        
+        properties_by_city = Property.objects.values('city').annotate(
+            count=Count('id'),
+            avg_price=Avg('price')
+        ).order_by('-count')[:10]
+        
+        # Price statistics
+        price_stats = Property.objects.aggregate(
+            min_price=Avg('price'),
+            max_price=Avg('price'),
+            avg_price=Avg('price')
+        )
+        
+        # Recent activity
+        week_ago = timezone.now() - timedelta(days=7)
+        recent_properties = Property.objects.filter(created_at__gte=week_ago).count()
+        
+        property_data = {
+            'byType': list(properties_by_type),
+            'byCity': list(properties_by_city),
+            'priceStats': price_stats,
+            'recentActivity': {
+                'newProperties': recent_properties,
+                'updatedProperties': Property.objects.filter(updated_at__gte=week_ago).count()
+            }
+        }
+        
+        return Response(property_data)
+        
+    except Exception as e:
+        return Response(
+            {'error': 'Failed to fetch property analytics'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsAdminUser])
+def admin_user_analytics(request):
+    """Detailed user analytics"""
+    try:
+        # User growth over time
+        user_growth = User.objects.extra({
+            'date': "date(date_joined)"
+        }).values('date').annotate(
+            count=Count('id')
+        ).order_by('date')[-30:]  # Last 30 days
+        
+        # User role distribution
+        role_distribution = User.objects.values('role').annotate(
+            count=Count('id')
+        )
+        
+        # User activity
+        active_users = User.objects.filter(
+            last_login__gte=timezone.now() - timedelta(days=30)
+        ).count()
+        
+        user_data = {
+            'growthTimeline': list(user_growth),
+            'roleDistribution': list(role_distribution),
+            'activity': {
+                'activeUsers': active_users,
+                'totalUsers': User.objects.count(),
+                'newUsersThisMonth': User.objects.filter(
+                    date_joined__gte=timezone.now() - timedelta(days=30)
+                ).count()
+            }
+        }
+        
+        return Response(user_data)
+        
+    except Exception as e:
+        return Response(
+            {'error': 'Failed to fetch user analytics'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+ 
+ 
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAdminUser])
+def admin_create_user(request):
+    """
+    Admin endpoint to create new users with email verification control
+    Only accessible by admin users
+    """
+    serializer = AdminUserCreateSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        try:
+            user = serializer.save()
+            return Response({
+                'message': 'User created successfully',
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'role': user.role,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'phone_number': user.phone_number,
+                    'is_active': user.is_active,
+                    'is_staff': user.is_staff,
+                    'email_verified': user.email_verified,  # Include verification status
+                    'date_joined': user.date_joined
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error creating user: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+ 
+from django.contrib.auth import get_user_model
+from django.db import transaction
+
+User = get_user_model()
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAdminUser])
+def admin_delete_user(request, user_id):
+    """
+    Admin endpoint to delete users
+    Only accessible by admin users
+    """
+    try:
+        # Prevent admin from deleting themselves
+        if request.user.id == user_id:
+            return Response({
+                'error': 'You cannot delete your own account'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user_to_delete = User.objects.get(id=user_id)
+        
+        # Prevent deletion of superusers by non-superusers
+        if user_to_delete.is_superuser and not request.user.is_superuser:
+            return Response({
+                'error': 'Only superusers can delete other superusers'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Store user info for the response before deletion
+        user_info = {
+            'id': user_to_delete.id,
+            'username': user_to_delete.username,
+            'email': user_to_delete.email,
+            'role': user_to_delete.role
+        }
+        
+        # Use transaction to ensure data consistency
+        with transaction.atomic():
+            user_to_delete.delete()
+        
+        return Response({
+            'message': 'User deleted successfully',
+            'deleted_user': user_info
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({
+            'error': 'User not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': f'Error deleting user: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)

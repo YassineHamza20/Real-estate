@@ -2,7 +2,9 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+@import 'leaflet/dist/leaflet.css';
 
+ 
 :root {
   /* LIGHT MODE — WARM ORANGE THEME */
   --background: oklch(1 0 0);           /* Pure white */
@@ -150,3 +152,4 @@
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, fill 0.15s ease, stroke 0.15s ease;
   }
 }
+

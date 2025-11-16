@@ -333,7 +333,7 @@ class AdminStatsSerializer(serializers.Serializer):
     rejected_verifications = serializers.IntegerField()
 
 
-####
+ 
 class AdminUserSerializer(serializers.ModelSerializer):
     verification_status = serializers.SerializerMethodField()
     profile_picture_url = serializers.SerializerMethodField()

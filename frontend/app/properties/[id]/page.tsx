@@ -19,6 +19,7 @@ import { Footer } from "@/components/footer"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 import { cn } from "@/lib/utils"
+import { RealMap } from "@/components/RealMap"
 
 export default function PropertyDetailPage() {
   const params = useParams()
@@ -129,6 +130,7 @@ export default function PropertyDetailPage() {
             <div className="lg:col-span-2 space-y-6">
               <Skeleton className="h-[500px] w-full rounded-2xl" />
               <Skeleton className="h-32 w-full rounded-2xl" />
+              <Skeleton className="h-80 w-full rounded-2xl" /> {/* Map skeleton */}
             </div>
             <div className="lg:col-span-1">
               <Skeleton className="h-96 w-full rounded-2xl" />
@@ -362,6 +364,31 @@ export default function PropertyDetailPage() {
                 <h2 className="text-2xl font-bold mb-4">Description</h2>
                 <p className="text-muted-foreground leading-relaxed text-lg">{property.description}</p>
               </div>
+            </motion.div>
+
+            {/* Map Section - ADDED THIS */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="bg-card/95 backdrop-blur-xl rounded-3xl border-2 border-border p-8 shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <MapPin className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Map</h2>
+                  <p className="text-muted-foreground">
+                    {property.address}, {property.city}
+                  </p>
+                </div>
+              </div>
+              
+         <RealMap address={property.address} city={property.city} className="w-full" />
+              
+              {/* Additional location info */}
+               
             </motion.div>
           </div>
 

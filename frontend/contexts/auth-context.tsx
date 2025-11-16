@@ -129,18 +129,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth()
   }, [])
 
-  const login = async (usernameOrEmail: string, password: string) => {
-    const response = await authApi.login({ 
-      email: usernameOrEmail,
-      password: password 
-    })
-    
-    localStorage.setItem('access_token', response.access)
-    localStorage.setItem('refresh_token', response.refresh)
-    
-    setUser(response.user)
-    resetInactivityTimer() // Start timer after login
-  }
+ const login = async (usernameOrEmail: string, password: string) => {
+  const response = await authApi.login({ 
+    email: usernameOrEmail,
+    password: password 
+  })
+  
+  localStorage.setItem('access_token', response.access)
+  localStorage.setItem('refresh_token', response.refresh)
+  
+  // Get fresh user data to ensure all fields including profile picture are loaded
+  const currentUser = await authApi.getCurrentUser()
+  setUser(currentUser)
+  resetInactivityTimer()
+}
 
   const refreshUser = async () => {
     try {

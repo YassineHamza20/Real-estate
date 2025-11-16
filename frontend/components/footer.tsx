@@ -108,12 +108,12 @@ export function Footer() {
             <ul className="space-y-3">
               <li className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                <span className="text-sm text-gray-400">123 Real Estate Ave, New York, NY 10001</span>
+                <span className="text-sm text-gray-400">Vogelsanger Weg 157, 40470 Düsseldorf</span>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-primary flex-shrink-0" />
                 <a href="tel:+15551234567" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                  +1 (555) 123-4567
+                  +49 155 109 16 918
                 </a>
               </li>
               <li className="flex items-center gap-2">

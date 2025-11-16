@@ -8,15 +8,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Mail, Phone, MapPin, Clock, Send, Sparkles } from "lucide-react"
+import { Mail, Phone, MapPin, Clock, Send, Sparkles, ChevronDown, ChevronUp } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Footer } from "@/components/footer"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 export default function ContactPage() {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeFaq, setActiveFaq] = useState<number | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -43,6 +44,10 @@ export default function ContactPage() {
 
     setFormData({ name: "", email: "", phone: "", subject: "", message: "" })
     setIsSubmitting(false)
+  }
+
+  const toggleFaq = (index: number) => {
+    setActiveFaq(activeFaq === index ? null : index)
   }
 
   const contactInfo = [
@@ -74,6 +79,38 @@ export default function ContactPage() {
       subdetails: "9:00 AM – 6:00 PM EST",
       gradient: "from-orange-500 to-amber-600",
     },
+  ]
+
+  const faqItems = [
+    {
+      question: "How do I become a verified seller?",
+      answer: "Register as a buyer first, then navigate to your profile and click 'Become a Seller'. You'll need to submit verification documents including ID and proof of ownership."
+    },
+    {
+      question: "How long does verification take?",
+      answer: "Seller verification typically takes 2-3 business days. You'll receive an email notification once your application is reviewed."
+    },
+    {
+      question: "Is there a fee to list properties?",
+      answer: "All listings are completely free. We believe in making real estate accessible to everyone without any upfront costs."
+    },
+    {
+      question: "What types of properties can I list?",
+      answer: "You can list residential properties (houses, apartments, villas), commercial properties (offices, retail spaces), land, and rental properties. All properties must be legally owned and properly documented."
+    },
+   
+    {
+      question: "What documents do I need to buy a property?",
+      answer: "Typically you'll need proof of funds or mortgage pre-approval, government-issued ID, and sometimes references. Our agents will guide you through the specific requirements for each property."
+    },
+    {
+      question: "Do you offer mortgage assistance?",
+      answer: "Yes, we partner with several financial institutions to help you find the best mortgage rates. Contact our mortgage specialists for personalized assistance."
+    },
+    {
+      question: "Can I list my property for both sale and rent?",
+      answer: "No, each property can only be listed for one purpose at a time to avoid confusion. You'll need to choose either sale or rental listing."
+    }
   ]
 
   return (
@@ -146,7 +183,7 @@ export default function ContactPage() {
       </section>
 
       {/* Enhanced Contact Form */}
-      <section className="py-20 pb-32">
+      <section className="py-20">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -304,6 +341,92 @@ export default function ContactPage() {
                 </form>
               </CardContent>
             </Card>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="py-20 bg-gradient-to-b from-background to-muted/30">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="max-w-4xl mx-auto text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Before reaching out, you might find answers to common questions in our FAQ section.
+            </p>
+          </motion.div>
+
+          <div className="max-w-3xl mx-auto">
+            {faqItems.map((faq, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="mb-4"
+              >
+                <Card className="border-2 border-primary/10 hover:border-primary/30 transition-all duration-300 bg-card/80 backdrop-blur-sm overflow-hidden">
+                  <CardContent className="p-0">
+                    <button
+                      onClick={() => toggleFaq(index)}
+                      className="w-full px-6 py-5 text-left flex items-center justify-between hover:bg-muted/30 transition-colors"
+                    >
+                      <span className="text-lg font-semibold text-foreground pr-4">
+                        {faq.question}
+                      </span>
+                      {activeFaq === index ? (
+                        <ChevronUp className="h-5 w-5 text-primary flex-shrink-0" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-primary flex-shrink-0" />
+                      )}
+                    </button>
+                    <AnimatePresence>
+                      {activeFaq === index && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-6 pb-5">
+                            <div className="w-12 h-1 bg-gradient-to-r from-primary to-accent rounded-full mb-4" />
+                            <p className="text-muted-foreground leading-relaxed">
+                              {faq.answer}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+            className="text-center mt-12"
+          >
+            <p className="text-lg text-muted-foreground mb-6">
+              Still have questions? We're here to help!
+            </p>
+            <Button
+              onClick={() => document.getElementById('contact-form')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg hover:shadow-xl transition-all"
+              size="lg"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Contact Us Directly
+            </Button>
           </motion.div>
         </div>
       </section>

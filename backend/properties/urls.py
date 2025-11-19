@@ -12,6 +12,8 @@ urlpatterns = [
     path('<int:property_id>/images/', views.PropertyImageListView.as_view(), name='property-images-list'),
     path('images/<int:pk>/', views.PropertyImageDetailView.as_view(), name='property-image-detail'),
     path('<int:property_id>/images/<int:image_id>/set_primary/', views.set_primary_image, name='set-primary-image'),
+
+    path('properties/filters/', views.property_filters, name='property-filters'),
     # Wishlist URLs
     path('wishlist/', views.WishlistListView.as_view(), name='wishlist-list'),
     path('wishlist/<int:pk>/', views.WishlistDetailView.as_view(), name='wishlist-detail'),
@@ -47,4 +49,5 @@ path('admin/analytics/performance/', views.admin_property_performance, name='adm
 path('admin/debug/', views.debug_property_data, name='debug-property-data'),
 # users/urls.py - Add this URL
 path('admin/analytics/', views.admin_analytics, name='admin-analytics'),
+
 ]

@@ -12,7 +12,8 @@ import { usersApi } from "@/lib/api/users"
 import type { Property } from "@/types/property"
 import {
   MapPin, Bed, Square, Calendar, Heart, Share2, ArrowLeft,
-  Phone, Mail, User, Check, ChevronLeft, ChevronRight, Star
+  Phone, Mail, User, Check, ChevronLeft, ChevronRight, Star,
+  X, ZoomIn
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { Footer } from "@/components/footer"
@@ -20,7 +21,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 import { cn } from "@/lib/utils"
 import { RealMap } from "@/components/RealMap"
-
+import { SimilarProperties } from "@/components/similar-properties"
 export default function PropertyDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -30,16 +31,24 @@ export default function PropertyDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [currentImg, setCurrentImg] = useState(0)
   const [isSaved, setIsSaved] = useState(false)
+  const [isWishlisted, setIsWishlisted] = useState(false)
+  const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false)
+  const [modalImageIndex, setModalImageIndex] = useState(0)
 
   const [sellerContact, setSellerContact] = useState<{
     first_name: string
     last_name: string
     email: string
     phone: string
+    is_verified: boolean
+    profile_picture_url?: string
   } | null>(null)
   const [contactLoading, setContactLoading] = useState(false)
+  const [sellerProfilePicture, setSellerProfilePicture] = useState<string | null>(null)
 
   const galleryRef = useRef<HTMLDivElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   /* ------------------------------------------------- */
   useEffect(() => {
@@ -48,6 +57,10 @@ export default function PropertyDetailPage() {
       try {
         const data = await propertiesApi.getProperty(params.id as string)
         setProperty(data)
+        // Check if property is in wishlist
+        if (user) {
+          checkWishlistStatus(data.id)
+        }
       } catch (e) {
         console.error(e)
       } finally {
@@ -55,7 +68,7 @@ export default function PropertyDetailPage() {
       }
     }
     fetch()
-  }, [params.id])
+  }, [params.id, user])
 
   useEffect(() => {
     if (!user || !property) return
@@ -64,6 +77,15 @@ export default function PropertyDetailPage() {
       try {
         const info = await usersApi.getSellerContact(property.seller.id)
         setSellerContact(info)
+        
+        // Fetch seller profile picture
+        try {
+          const pictureData = await usersApi.getUserProfilePicture(property.seller.id)
+          setSellerProfilePicture(pictureData.profile_picture_url)
+        } catch (pictureError) {
+          console.error("Error fetching seller profile picture:", pictureError)
+          setSellerProfilePicture(null)
+        }
       } catch (e) {
         console.error(e)
       } finally {
@@ -74,6 +96,45 @@ export default function PropertyDetailPage() {
   }, [user, property])
 
   /* ------------------------------------------------- */
+  // Wishlist functionality
+  const checkWishlistStatus = async (propertyId: string) => {
+    try {
+      const status = await propertiesApi.checkWishlistStatus(propertyId)
+      setIsWishlisted(status.in_wishlist)
+    } catch (error) {
+      console.error("Error checking wishlist status:", error)
+    }
+  }
+
+  const toggleWishlist = async () => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    if (!property) return
+
+    setWishlistLoading(true)
+    try {
+      const response = await propertiesApi.toggleWishlist(property.id)
+      setIsWishlisted(response.in_wishlist)
+      
+      // Show confetti when adding to wishlist
+      if (response.in_wishlist) {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { x: 0.9, y: 0.1 },
+          colors: ["#ff6b6b", "#ffa726", "#66bb6a"]
+        })
+      }
+    } catch (error) {
+      console.error("Error toggling wishlist:", error)
+    } finally {
+      setWishlistLoading(false)
+    }
+  }
+
   // Sort images to show primary first
   const sortedImages = property?.images ? [...property.images].sort((a, b) => {
     // Primary images come first
@@ -96,6 +157,23 @@ export default function PropertyDetailPage() {
     setCurrentImg((prev) => (prev === totalImages - 1 ? 0 : prev + 1))
   }
 
+  const goToPrevModal = () => {
+    setModalImageIndex((prev) => (prev === 0 ? totalImages - 1 : prev - 1))
+  }
+
+  const goToNextModal = () => {
+    setModalImageIndex((prev) => (prev === totalImages - 1 ? 0 : prev + 1))
+  }
+
+  const openImageModal = (index: number) => {
+    setModalImageIndex(index)
+    setIsImageModalOpen(true)
+  }
+
+  const closeImageModal = () => {
+    setIsImageModalOpen(false)
+  }
+
   const handleSave = () => {
     setIsSaved(true)
     confetti({
@@ -113,12 +191,40 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (!property) return
-      if (e.key === "ArrowLeft") goToPrev()
-      if (e.key === "ArrowRight") goToNext()
+      
+      if (isImageModalOpen) {
+        // Handle keyboard navigation in modal
+        if (e.key === "ArrowLeft") goToPrevModal()
+        if (e.key === "ArrowRight") goToNextModal()
+        if (e.key === "Escape") closeImageModal()
+      } else {
+        // Handle keyboard navigation in main gallery
+        if (e.key === "ArrowLeft") goToPrev()
+        if (e.key === "ArrowRight") goToNext()
+      }
     }
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
-  }, [property, currentImg])
+  }, [property, currentImg, isImageModalOpen])
+
+  // Close modal when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        closeImageModal()
+      }
+    }
+
+    if (isImageModalOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.body.style.overflow = 'hidden' // Prevent background scrolling
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.body.style.overflow = 'unset'
+    }
+  }, [isImageModalOpen])
 
   /* ------------------------------------------------- */
   if (isLoading) {
@@ -181,8 +287,11 @@ export default function PropertyDetailPage() {
               className="relative bg-card rounded-3xl border-2 border-border overflow-hidden shadow-2xl group"
               style={{ perspective: 1000 }}
             >
-              {/* Image */}
-              <div className="relative h-[520px]">
+              {/* Image Container - Make this clickable */}
+              <div 
+                className="relative h-[520px] cursor-zoom-in"
+                onClick={() => openImageModal(currentImg)}
+              >
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={currentImg}
@@ -206,6 +315,12 @@ export default function PropertyDetailPage() {
                         Primary
                       </div>
                     )}
+
+                    {/* Zoom In Button */}
+                    <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ZoomIn className="h-4 w-4" />
+                      Click to enlarge
+                    </div>
                   </motion.div>
                 </AnimatePresence>
 
@@ -217,10 +332,45 @@ export default function PropertyDetailPage() {
                   {currentImg + 1} / {totalImages}
                 </div>
 
+                {/* Wishlist Button - Top Right */}
+                <motion.div
+                  className="absolute top-4 right-20"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={cn(
+                      "h-12 w-12 rounded-xl shadow-lg backdrop-blur-md border-white/20",
+                      isWishlisted && "bg-yellow-500 text-white border-yellow-500",
+                      wishlistLoading && "opacity-50 cursor-not-allowed"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent triggering the image modal
+                      toggleWishlist()
+                    }}
+                    disabled={wishlistLoading}
+                  >
+                    <motion.div
+                      animate={{ 
+                        scale: isWishlisted ? [1, 1.3, 1] : 1,
+                        rotate: isWishlisted ? [0, 10, -10, 0] : 0
+                      }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      <Heart className={cn("h-5 w-5", isWishlisted && "fill-current")} />
+                    </motion.div>
+                  </Button>
+                </motion.div>
+
                 {/* Left Arrow */}
                 {totalImages > 1 && (
                   <button
-                    onClick={goToPrev}
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent triggering the image modal
+                      goToPrev()
+                    }}
                     className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-white/30 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary"
                     aria-label="Previous image"
                   >
@@ -231,7 +381,10 @@ export default function PropertyDetailPage() {
                 {/* Right Arrow */}
                 {totalImages > 1 && (
                   <button
-                    onClick={goToNext}
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent triggering the image modal
+                      goToNext()
+                    }}
                     className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-white/30 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary"
                     aria-label="Next image"
                   >
@@ -266,15 +419,23 @@ export default function PropertyDetailPage() {
                       key={img.id}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => setCurrentImg(i)}
+                      onClick={() => {
+                        setCurrentImg(i)
+                        openImageModal(i) // Open modal when clicking thumbnails too
+                      }}
                       className={cn(
-                        "relative h-20 w-20 flex-shrink-0 rounded-xl overflow-hidden border-3 transition-all",
+                        "relative h-20 w-20 flex-shrink-0 rounded-xl overflow-hidden border-3 transition-all cursor-pointer",
                         i === currentImg
                           ? "border-primary ring-2 ring-primary/30 shadow-lg"
                           : "border-border/50 hover:border-primary/50"
                       )}
                     >
-                      <Image src={img.url ?? "/placeholder.svg"} alt="" fill className="object-cover" />
+                      <Image 
+                        src={img.url ?? "/placeholder.svg"} 
+                        alt="" 
+                        fill 
+                        className="object-cover"
+                      />
                       
                       {/* Primary Badge on Thumbnail */}
                       {img.is_primary && (
@@ -288,6 +449,7 @@ export default function PropertyDetailPage() {
               )}
             </motion.div>
 
+            {/* Rest of your existing content remains the same */}
             {/* Description Card */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -307,22 +469,7 @@ export default function PropertyDetailPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  {/* <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn("h-12 w-12 rounded-xl shadow-lg", isSaved && "bg-primary text-white")}
-                    onClick={handleSave}
-                  >
-                    <motion.div
-                      animate={{ scale: isSaved ? [1, 1.3, 1] : 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Heart className={cn("h-5 w-5", isSaved && "fill-current")} />
-                    </motion.div>
-                  </Button> */}
-                  {/* <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl shadow-lg">
-                    <Share2 className="h-5 w-5" />
-                  </Button> */}
+                  {/* Share button can be added here if needed */}
                 </div>
               </div>
 
@@ -332,10 +479,16 @@ export default function PropertyDetailPage() {
                 </Badge>
                 <Badge
                   variant={property.status === "active" ? "default" : "secondary"}
-                  className="text-base px-4 py-1.5 capitalize font-medium"
+                  className="text-base px-4py-1.5 capitalize font-medium"
                 >
                   {property.status}
                 </Badge>
+                {isWishlisted && (
+                  <Badge variant="default" className="text-base px-4 py-1.5 bg-yellow-700 text-white font-medium">
+                    <Heart className="h-3 w-3 fill-current mr-1" />
+                    In Wishlist
+                  </Badge>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-6 mb-8 p-6 bg-muted/50 rounded-2xl">
@@ -366,7 +519,7 @@ export default function PropertyDetailPage() {
               </div>
             </motion.div>
 
-            {/* Map Section - ADDED THIS */}
+            {/* Map Section */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -385,11 +538,14 @@ export default function PropertyDetailPage() {
                 </div>
               </div>
               
-         <RealMap address={property.address} city={property.city} className="w-full" />
-              
-              {/* Additional location info */}
-               
+              <RealMap 
+                address={property.address} 
+                city={property.city} 
+                className="w-full"
+              />
             </motion.div>
+
+            <SimilarProperties currentProperty={property} />
           </div>
 
           {/* Sidebar */}
@@ -413,8 +569,18 @@ export default function PropertyDetailPage() {
                     <div className="space-y-6">
                       <div className="pt-6 border-t space-y-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shadow-md">
-                            <User className="h-7 w-7 text-primary" />
+                          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center shadow-md overflow-hidden">
+                            {sellerProfilePicture ? (
+                              <Image
+                                src={sellerProfilePicture}
+                                alt={`${sellerContact?.first_name || property.seller.name}'s profile`}
+                                width={56}
+                                height={56}
+                                className="rounded-full object-cover"
+                              />
+                            ) : (
+                              <User className="h-7 w-7 text-primary" />
+                            )}
                           </div>
                           <div>
                             <h3 className="font-semibold text-lg">
@@ -423,6 +589,12 @@ export default function PropertyDetailPage() {
                                 : property.seller.name}
                             </h3>
                             <p className="text-sm text-muted-foreground">Property Owner</p>
+                            {sellerContact?.is_verified && (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 mt-1">
+                                <Check className="h-3 w-3 mr-1" />
+                                Verified Seller
+                              </Badge>
+                            )}
                           </div>
                         </div>
 
@@ -438,7 +610,7 @@ export default function PropertyDetailPage() {
                                 whileHover={{ scale: 1.03 }}
                                 whileTap={{ scale: 0.98 }}
                                 href={`tel:${sellerContact.phone}`}
-                                className="flex items-center justify-between p-4 bg-muted/30 rounded-xl shadow-sm"
+                                className="flex items-center justify-between p-4 bg-muted/30 rounded-xl shadow-sm hover:bg-muted/50 transition-colors"
                               >
                                 <div className="flex items-center gap-3">
                                   <Phone className="h-5 w-5 text-primary" />
@@ -454,7 +626,7 @@ export default function PropertyDetailPage() {
                                 whileHover={{ scale: 1.03 }}
                                 whileTap={{ scale: 0.98 }}
                                 href={`mailto:${sellerContact.email}`}
-                                className="flex items-center justify-between p-4 bg-muted/30 rounded-xl shadow-sm"
+                                className="flex items-center justify-between p-4 bg-muted/30 rounded-xl shadow-sm hover:bg-muted/50 transition-colors"
                               >
                                 <div className="flex items-center gap-3">
                                   <Mail className="h-5 w-5 text-primary" />
@@ -491,8 +663,102 @@ export default function PropertyDetailPage() {
               </Card>
             </motion.div>
           </div>
+          
         </div>
       </div>
+
+      {/* Image Modal */}
+      <AnimatePresence>
+        {isImageModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-lg z-50 flex items-center justify-center p-4"
+          >
+            <div 
+              ref={modalRef}
+              className="relative max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center"
+            >
+              {/* Close Button */}
+              <button
+                onClick={closeImageModal}
+                className="absolute top-4 right-4 z-10 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full backdrop-blur-md transition-all hover:scale-110"
+              >
+                <X className="h-6 w-6" />
+              </button>
+
+              {/* Navigation Arrows - Outside the image */}
+              {totalImages > 1 && (
+                <>
+                  <button
+                    onClick={goToPrevModal}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white p-4 rounded-full backdrop-blur-md transition-all hover:scale-110"
+                  >
+                    <ChevronLeft className="h-8 w-8" />
+                  </button>
+                  <button
+                    onClick={goToNextModal}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/70 text-white p-4 rounded-full backdrop-blur-md transition-all hover:scale-110"
+                  >
+                    <ChevronRight className="h-8 w-8" />
+                  </button>
+                </>
+              )}
+
+              {/* Image Counter */}
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/50 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium z-10">
+                {modalImageIndex + 1} / {totalImages}
+              </div>
+
+              {/* Main Image */}
+              <motion.div
+                key={modalImageIndex}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+                className="relative w-full h-full flex items-center justify-center"
+              >
+                <Image
+                  src={sortedImages[modalImageIndex]?.url ?? "/placeholder.svg"}
+                  alt={`${property.name} - Image ${modalImageIndex + 1}`}
+                  width={1200}
+                  height={800}
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                  quality={100}
+                />
+              </motion.div>
+
+              {/* Thumbnails */}
+              {totalImages > 1 && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4 py-2 bg-black/50 backdrop-blur-md rounded-xl">
+                  {sortedImages.map((img, i) => (
+                    <button
+                      key={img.id}
+                      onClick={() => setModalImageIndex(i)}
+                      className={cn(
+                        "relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all",
+                        i === modalImageIndex
+                          ? "border-primary ring-2 ring-primary/30 shadow-lg"
+                          : "border-white/30 hover:border-white/50"
+                      )}
+                    >
+                      <Image
+                        src={img.url ?? "/placeholder.svg"}
+                        alt=""
+                        width={64}
+                        height={64}
+                        className="object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Footer />
     </div>

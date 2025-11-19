@@ -12,7 +12,8 @@ urlpatterns = [
     
     # User profile
     path('profile/', views.UserProfileView.as_view(), name='profile'),
-    
+    path('profile/picture/', views.get_my_profile_picture, name='my-profile-picture'),
+    path('users/<int:user_id>/picture/', views.get_user_profile_picture, name='user-profile-picture'),
     # Seller verification
     path('verify-seller/', views.SellerVerificationView.as_view(), name='verify-seller'),
     path('verification-status/', views.check_verification_status, name='verification-status'),

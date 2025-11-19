@@ -1,4 +1,3 @@
-// components/RealMap.tsx
 "use client"
 
 import { useEffect, useRef, useState } from 'react'
@@ -26,6 +25,22 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
   const fullAddress = `${address}, ${city}`
   const encodedQuery = encodeURIComponent(fullAddress)
 
+  // Fallback coordinates based on city (used if geocoding fails)
+  const getCityCoords = (cityName: string): Coordinates => {
+    const cityLower = cityName.toLowerCase()
+    if (cityLower.includes('berlin')) return { lat: 52.5200, lng: 13.4050 }
+    if (cityLower.includes('munich') || cityLower.includes('münchen')) return { lat: 48.1351, lng: 11.5820 }
+    if (cityLower.includes('hamburg')) return { lat: 53.5511, lng: 9.9937 }
+    if (cityLower.includes('cologne') || cityLower.includes('köln')) return { lat: 50.9375, lng: 6.9603 }
+    if (cityLower.includes('frankfurt')) return { lat: 50.1109, lng: 8.6821 }
+    if (cityLower.includes('stuttgart')) return { lat: 48.7758, lng: 9.1829 }
+    if (cityLower.includes('düsseldorf')) return { lat: 51.2277, lng: 6.7735 }
+    if (cityLower.includes('dortmund')) return { lat: 51.5136, lng: 7.4653 }
+    if (cityLower.includes('essen')) return { lat: 51.4556, lng: 7.0116 }
+    if (cityLower.includes('leipzig')) return { lat: 51.3397, lng: 12.3731 }
+    return { lat: 52.5200, lng: 13.4050 } // Default to Berlin
+  }
+
   // Geocode the address to get exact coordinates
   useEffect(() => {
     const geocodeAddress = async () => {
@@ -38,6 +53,10 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodedQuery}&limit=1`
         )
         
+        if (!response.ok) {
+          throw new Error('Geocoding service unavailable')
+        }
+        
         const data = await response.json()
         
         if (data && data.length > 0) {
@@ -47,7 +66,11 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
             lng: parseFloat(lon)
           })
         } else {
-          throw new Error('Address not found')
+          // Use fallback coordinates instead of throwing error
+          console.log('Address not found, using city center coordinates')
+          setError('Exact address not found. Showing approximate location.')
+          const fallbackCoords = getCityCoords(city)
+          setCoordinates(fallbackCoords)
         }
       } catch (err) {
         console.error('Geocoding error:', err)
@@ -73,6 +96,8 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
       try {
         // Dynamically import Leaflet
         const L = await import('leaflet')
+        // Import Leaflet CSS
+        await import('leaflet/dist/leaflet.css')
         
         // Fix for default markers
         delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -82,7 +107,7 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
           shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
         })
 
-        // Initialize map with exact coordinates
+        // Initialize map with coordinates
         mapInstance.current = L.map(mapRef.current!).setView(
           [coordinates.lat, coordinates.lng], 
           16 // Zoom closer for exact address
@@ -107,7 +132,6 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
               display: flex;
               align-items: center;
               justify-content: center;
-              animation: pulse 2s infinite;
             ">
               <div style="
                 width: 10px;
@@ -116,13 +140,6 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
                 border-radius: 50%;
               "></div>
             </div>
-            <style>
-              @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.1); }
-                100% { transform: scale(1); }
-              }
-            </style>
           `,
           className: 'exact-location-marker',
           iconSize: [32, 32],
@@ -166,40 +183,20 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
     }
   }, [coordinates, address, city])
 
-  // Fallback coordinates based on city (used if geocoding fails)
-  const getCityCoords = (cityName: string): Coordinates => {
-    const cityLower = cityName.toLowerCase()
-    if (cityLower.includes('berlin')) return { lat: 52.5200, lng: 13.4050 }
-    if (cityLower.includes('munich') || cityLower.includes('münchen')) return { lat: 48.1351, lng: 11.5820 }
-    if (cityLower.includes('hamburg')) return { lat: 53.5511, lng: 9.9937 }
-    if (cityLower.includes('cologne') || cityLower.includes('köln')) return { lat: 50.9375, lng: 6.9603 }
-    if (cityLower.includes('frankfurt')) return { lat: 50.1109, lng: 8.6821 }
-    if (cityLower.includes('stuttgart')) return { lat: 48.7758, lng: 9.1829 }
-    if (cityLower.includes('düsseldorf')) return { lat: 51.2277, lng: 6.7735 }
-    if (cityLower.includes('dortmund')) return { lat: 51.5136, lng: 7.4653 }
-    if (cityLower.includes('essen')) return { lat: 51.4556, lng: 7.0116 }
-    if (cityLower.includes('leipzig')) return { lat: 51.3397, lng: 12.3731 }
-    return { lat: 52.5200, lng: 13.4050 } // Default to Berlin
-  }
-
-  const openStreetMapUrl = `https://www.openstreetmap.org/search?query=${encodedQuery}`
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`
 
-  const openInNativeMaps = () => {
-    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      window.open(`http://maps.apple.com/?q=${encodedQuery}`)
-    } else {
-      window.open(googleMapsUrl)
-    }
+  const openInGoogleMaps = () => {
+    window.open(googleMapsUrl, '_blank')
   }
 
   return (
     <div className={`relative rounded-2xl overflow-hidden border-2 border-border ${className}`}>
-      <div className="w-full h-80 relative">
+      {/* Increased vertical height from h-80 to h-96 (384px) */}
+      <div className="w-full h-96 relative">
         {/* Real Map Container */}
         <div 
           ref={mapRef} 
-          className="w-full h-80 z-10 rounded-2xl"
+          className="w-full h-96 z-10 rounded-2xl"
         />
         
         {/* Loading state */}
@@ -220,42 +217,10 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
           </div>
         )}
         
-        {/* Success state - Exact location found */}
-        {/* {coordinates && !isLoading && !error && (
-          <div className="absolute top-4 left-4 bg-green-100 border border-green-400 text-green-800 px-3 py-1 rounded-lg z-30 text-sm">
-            ✓ Exact location found
-          </div>
-        )} */}
-        
-        {/* Overlay Info */}
-        {/* <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm px-4 py-3 rounded-xl shadow-2xl border z-20">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-red-600" />
-            <div>
-              <h3 className="font-bold text-sm">Property Location</h3>
-              <p className="text-xs text-gray-600 max-w-[200px] truncate">{fullAddress}</p>
-              {coordinates && (
-                <p className="text-xs text-green-600 font-medium mt-1">
-                  {error ? 'Approximate location' : 'Exact location'}
-                </p>
-              )}
-            </div>
-          </div>
-        </div> */}
-        
-        {/* Action Buttons */}
+        {/* Action Button */}
         <div className="absolute bottom-4 left-4 right-4 flex gap-2 z-20">
-          {/* <Button 
-            onClick={() => window.open(openStreetMapUrl, '_blank')}
-            size="sm"
-            variant="secondary"
-            className="flex-1 gap-2 bg-white/95 hover:bg-white backdrop-blur-md"
-          >
-            <ExternalLink className="h-4 w-4" />
-            OpenStreetMap
-          </Button> */}
           <Button 
-            onClick={openInNativeMaps}
+            onClick={openInGoogleMaps}
             size="sm"
             className="flex-1 gap-2"
           >
@@ -263,14 +228,6 @@ export function RealMap({ address, city, className = "" }: RealMapProps) {
             View on Google Maps
           </Button>
         </div>
-        
-        {/* Coordinates info */}
-        {coordinates && (
-          <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-2 rounded-lg z-20 text-xs">
-            <div>Lat: {coordinates.lat.toFixed(6)}</div>
-            <div>Lng: {coordinates.lng.toFixed(6)}</div>
-          </div>
-        )}
       </div>
     </div>
   )

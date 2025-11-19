@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAdminUser
  # properties/views.py - Add this import at the top
  # properties/views.py - Add these analytics views
 from django.db.models import Count, Avg, Q, F, Sum
- 
+from django_filters import rest_framework as django_filters
 from django.contrib.auth import get_user_model
 
  
@@ -26,12 +26,28 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
-
+class PropertyFilter(django_filters.FilterSet):
+    price_min = django_filters.NumberFilter(field_name="price", lookup_expr='gte')
+    price_max = django_filters.NumberFilter(field_name="price", lookup_expr='lte')
+    bedrooms = django_filters.NumberFilter(field_name="number_of_rooms", lookup_expr='gte')
+    search = django_filters.CharFilter(method='filter_search')
+    
+    class Meta:
+        model = Property
+        fields = ['property_type', 'city', 'is_available']
+    
+    def filter_search(self, queryset, name, value):
+        return queryset.filter(
+            models.Q(name__icontains=value) |
+            models.Q(description__icontains=value) |
+            models.Q(address__icontains=value) |
+            models.Q(city__icontains=value)
+        )
 
 class PropertyListCreateView(generics.ListCreateAPIView):
     queryset = Property.objects.all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['property_type', 'city', 'number_of_rooms', 'is_available']
+    filterset_class = PropertyFilter  # Use the custom filter class
     search_fields = ['name', 'description', 'address', 'city']
     ordering_fields = ['price', 'created_at', 'size']
     ordering = ['-created_at']
@@ -53,6 +69,8 @@ class PropertyListCreateView(generics.ListCreateAPIView):
     
     def perform_create(self, serializer):
         serializer.save(seller=self.request.user)
+
+
 
 class PropertyDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Property.objects.all()

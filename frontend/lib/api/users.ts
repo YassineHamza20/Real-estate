@@ -171,32 +171,34 @@ async updateProfile(profileData: any, profilePicture?: File): Promise<UserProfil
     return response.json();
   },
 
-  async getSellerContact(sellerId: string): Promise<{
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    is_verified: boolean;
-  }> {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      throw new Error('Not authenticated')
-    }
+ // In lib/api/users.ts - Update getSellerContact method
+async getSellerContact(sellerId: string): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  is_verified: boolean;
+  profile_picture?: string; // Add this line
+}> {
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
 
-    const response = await fetch(`${API_BASE_URL}/api/users/seller/${sellerId}/contact/`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch seller contact: ${response.statusText}`)
-    }
-    
-    return response.json()
-  },
+  const response = await fetch(`${API_BASE_URL}/api/users/seller/${sellerId}/contact/`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  })
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch seller contact: ${response.statusText}`)
+  }
+  
+  return response.json()
+},
 
   async deleteVerification(): Promise<any> {
     const token = localStorage.getItem('auth_token');
@@ -305,5 +307,86 @@ async deleteUser(userId: number): Promise<any> {
     return response.json();
   },
 
+ 
+  async getMyProfilePicture(): Promise<{
+    user_id: string;
+    profile_picture_url: string | null;
+    has_profile_picture: boolean;
+  }> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
 
+    const response = await fetch(`${API_BASE_URL}/api/users/profile/picture/`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        throw new Error('Not authenticated');
+      }
+      throw new Error('Failed to fetch profile picture');
+    }
+    
+    return response.json();
+  },
+
+  async getUserProfilePicture(userId: string): Promise<{
+    user_id: string;
+    profile_picture_url: string | null;
+    has_profile_picture: boolean;
+  }> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/users/users/${userId}/picture/`, {
+      method: 'GET',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        throw new Error('Not authenticated');
+      }
+      if (response.status === 403) {
+        throw new Error('No permission to view this user profile picture');
+      }
+      if (response.status === 404) {
+        throw new Error('User not found');
+      }
+      throw new Error('Failed to fetch user profile picture');
+    }
+    
+    return response.json();
+  },
+
+  // Helper function to get profile picture URL with fallback
+  async getProfilePictureUrl(userId?: string): Promise<string | null> {
+    try {
+      let pictureData;
+      if (userId) {
+        pictureData = await usersApi.getUserProfilePicture(userId);
+      } else {
+        pictureData = await usersApi.getMyProfilePicture();
+      }
+      return pictureData.profile_picture_url;
+    } catch (error) {
+      console.error('Error fetching profile picture:', error);
+      return null;
+    }
+  }
 }

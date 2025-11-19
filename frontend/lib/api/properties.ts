@@ -50,80 +50,91 @@ function transformImages(images: any[]): { id: string; url: string; order: numbe
 }
 
 export const propertiesApi = {
-  async getProperties(filters?: PropertyFilters): Promise<Property[]> {
-    try {
-      // Build query parameters from filters
-      const queryParams = new URLSearchParams()
-      
-      if (filters?.search) {
-        queryParams.append('search', filters.search)
-      }
-      if (filters?.city) {
-        queryParams.append('city', filters.city)
-      }
-      if (filters?.property_type) {
-        queryParams.append('property_type', filters.property_type)
-      }
-      if (filters?.minPrice) {
-        queryParams.append('price_min', filters.minPrice.toString())
-      }
-      if (filters?.maxPrice) {
-        queryParams.append('price_max', filters.maxPrice.toString())
-      }
-      if (filters?.bedrooms) {
-        queryParams.append('number_of_rooms', filters.bedrooms.toString())
-      }
+  
 
-      // Get auth token
-      const token = localStorage.getItem('access_token')
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      }
-      
-      // Add authorization header if token exists
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
 
-      const response = await fetch(`${API_BASE_URL}/properties/?${queryParams.toString()}`, {
-        method: 'GET',
-        headers: headers,
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch properties: ${response.statusText}`)
-      }
-      
-      const properties = await response.json()
-      
-      // Transform the backend response to match your frontend Property type
-      return properties.map((property: any) => ({
-        id: property.id.toString(),
-        name: property.name,
-        description: property.description,
-        address: property.address,
-        city: property.city,
-        price: safeParseFloat(property.price),
-        bedrooms: property.number_of_rooms,
-        squareMeters: safeParseFloat(property.size),
-        type: property.property_type,
-        status: property.is_available ? 'active' : 'inactive',
-        images: transformImages(property.images || []),
-        seller: {
-          id: property.seller.toString(),
-          name: property.seller_name,
-          email: property.seller_email,
-          phone: property.seller_phone,
-        },
-        createdAt: property.created_at,
-        updatedAt: property.updated_at,
-        inWishlist: property.in_wishlist,
-      }))
-    } catch (error) {
-      console.error('Error fetching properties:', error)
-      throw error
+// lib/api/properties.ts - UPDATE THE getProperties FUNCTION
+async getProperties(filters?: any): Promise<Property[]> {
+  try {
+    // Build query parameters from filters
+    const queryParams = new URLSearchParams()
+    
+    if (filters?.search) {
+      queryParams.append('search', filters.search)
     }
-  },
+    if (filters?.city) {
+      queryParams.append('city', filters.city)
+    }
+    if (filters?.property_type) {
+      queryParams.append('property_type', filters.property_type)
+    }
+    if (filters?.price_min) {
+      queryParams.append('price_min', filters.price_min.toString())
+    }
+    if (filters?.price_max) {
+      queryParams.append('price_max', filters.price_max.toString())
+    }
+    if (filters?.bedrooms) {
+      queryParams.append('bedrooms', filters.bedrooms.toString()) // Use 'bedrooms' to match your Django filter
+    }
+
+    // Remove page and limit from query params since your Django backend doesn't use them
+    // Your backend handles pagination differently
+
+    console.log("API Call URL:", `${API_BASE_URL}/properties/?${queryParams.toString()}`)
+
+    // Get auth token
+    const token = localStorage.getItem('access_token')
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    }
+    
+    // Add authorization header if token exists
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(`${API_BASE_URL}/properties/?${queryParams.toString()}`, {
+      method: 'GET',
+      headers: headers,
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch properties: ${response.statusText}`)
+    }
+    
+    const properties = await response.json()
+    
+    // Transform the backend response to match your frontend Property type
+    return properties.map((property: any) => ({
+      id: property.id.toString(),
+      name: property.name,
+      description: property.description,
+      address: property.address,
+      city: property.city,
+      price: safeParseFloat(property.price),
+      bedrooms: property.number_of_rooms,
+      squareMeters: safeParseFloat(property.size),
+      type: property.property_type,
+      status: property.is_available ? 'active' : 'inactive',
+      images: transformImages(property.images || []),
+      seller: {
+        id: property.seller.toString(),
+        name: property.seller_name,
+        email: property.seller_email,
+        phone: property.seller_phone,
+      },
+      createdAt: property.created_at,
+      updatedAt: property.updated_at,
+      inWishlist: property.in_wishlist,
+    }))
+  } catch (error) {
+    console.error('Error fetching properties:', error)
+    throw error
+  }
+},
+
+
 
   async getProperty(id: string): Promise<Property> {
     try {

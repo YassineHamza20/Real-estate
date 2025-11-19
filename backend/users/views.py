@@ -1063,3 +1063,58 @@ def admin_delete_user(request, user_id):
         return Response({
             'error': f'Error deleting user: {str(e)}'
         }, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_user_profile_picture(request, user_id):
+    """
+    Get user profile picture URL
+    Allow users to see profile pictures of property sellers
+    """
+    try:
+        user = User.objects.get(id=user_id)
+        
+        # Allow access if:
+        # 1. User is viewing their own picture
+        # 2. User is admin
+        # 3. User is viewing a seller's picture (for property pages)
+        if (request.user.id != user_id and 
+            request.user.role != User.Role.ADMIN and
+            user.role != User.Role.SELLER):
+            return Response(
+                {"error": "You don't have permission to view this user's profile picture"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        profile_picture_url = None
+        if user.profile_picture:
+            profile_picture_url = request.build_absolute_uri(user.profile_picture.url)
+        
+        return Response({
+            "user_id": user_id,
+            "profile_picture_url": profile_picture_url,
+            "has_profile_picture": bool(user.profile_picture)
+        })
+        
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_my_profile_picture(request):
+    """
+    Get current user's profile picture
+    """
+    profile_picture_url = None
+    if request.user.profile_picture:
+        profile_picture_url = request.build_absolute_uri(request.user.profile_picture.url)
+    
+    return Response({
+        "user_id": request.user.id,
+        "profile_picture_url": profile_picture_url,
+        "has_profile_picture": bool(request.user.profile_picture)
+    })

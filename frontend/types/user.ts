@@ -46,3 +46,10 @@ export interface SavedSearch {
   createdAt: string
   notificationsEnabled: boolean
 }
+
+
+export interface ProfilePictureResponse {
+  user_id: string;
+  profile_picture_url: string | null;
+  has_profile_picture: boolean;
+}

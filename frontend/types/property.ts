@@ -9,6 +9,10 @@ export interface Property {
   city: string
   price: number
   bedrooms: number
+  priceRange?: {
+    min?: number
+    max?: number
+  }
   squareMeters: number
   type: PropertyType
   status: PropertyStatus
@@ -50,11 +54,16 @@ export interface PropertyFormData {
 export interface PropertyFilters {
   search?: string
   city?: string
-  property_type?: PropertyType // Changed from type
+  property_type?: PropertyType // This is what your backend expects
   minPrice?: number
   maxPrice?: number
   bedrooms?: number
- 
+  // Add these missing properties that your component uses:
+  priceRange?: {
+    min?: number
+    max?: number
+  }
+  type?: PropertyType // Your component uses this, but it should map to property_type
 }
 
 export interface PropertySearchResponse {

@@ -6,12 +6,11 @@ import { PropertyFilters } from "@/components/property-filters"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { propertiesApi } from "@/lib/api/properties"
-import type { Property, PropertyFilters as Filters } from "@/types/property"
+import type { Property, PropertyFilters as Filters, PropertyType } from "@/types/property"
 import { SlidersHorizontal, Grid3x3, List, Sparkles, LogIn } from "lucide-react"
 import { Footer } from "@/components/footer"
 import { useAuth } from "@/contexts/auth-context"
 import { motion, AnimatePresence } from "framer-motion"
-import { cn } from "@/lib/utils"
 
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([])
@@ -22,35 +21,86 @@ export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const { user, isAuthenticated } = useAuth()
   const observer = useRef<IntersectionObserver | null>(null)
   const lastPropertyRef = useRef<HTMLDivElement>(null)
 
-  // --- Load Properties ---
+  // --- Simple Load Properties Function ---
   const loadProperties = useCallback(async (pageNum = 1, append = false) => {
     if (pageNum === 1) setIsLoading(true)
     else setIsLoadingMore(true)
 
     try {
-      const newProperties = await propertiesApi.getProperties({ ...filters, page: pageNum, limit: 9 })
+      // Transform filters to match backend API parameter names
+      const apiFilters: any = {}
+
+      // Add search query
+      if (searchQuery.trim()) {
+        apiFilters.search = searchQuery.trim()
+      }
+
+      // Add other filters - using the exact parameter names your backend expects
+      if (filters.city) {
+        apiFilters.city = filters.city
+      }
+      
+      // Handle type filter - map 'type' to 'property_type' for backend
+      if (filters.type) {
+        apiFilters.property_type = filters.type
+      }
+      
+      // Also check if property_type is set directly
+      if (filters.property_type) {
+        apiFilters.property_type = filters.property_type
+      }
+
+      if (filters.bedrooms) {
+        apiFilters.bedrooms = filters.bedrooms
+      }
+
+      // Handle price range - your backend expects price_min and price_max
+      if (filters.priceRange) {
+        const { min, max } = filters.priceRange
+        if (min !== undefined && min !== null && min > 0) {
+          apiFilters.price_min = min
+        }
+        if (max !== undefined && max !== null && max > 0) {
+          apiFilters.price_max = max
+        }
+      }
+
+      // Also support direct minPrice/maxPrice (fallback)
+      if (filters.minPrice) {
+        apiFilters.price_min = filters.minPrice
+      }
+      if (filters.maxPrice) {
+        apiFilters.price_max = filters.maxPrice
+      }
+
+      console.log("🔍 Loading properties with filters:", apiFilters)
+
+      const newProperties = await propertiesApi.getProperties(apiFilters)
+      
       setProperties(prev => append ? [...prev, ...newProperties] : newProperties)
       setHasMore(newProperties.length === 9)
     } catch (error) {
-      console.error("[v0] Failed to load properties:", error)
+      console.error("❌ Failed to load properties:", error)
       setProperties([])
       setHasMore(false)
     } finally {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-  }, [filters])
+  }, [filters, searchQuery])
 
-  // --- Initial Load & Filter Change ---
+  // --- Initial Load & Filter/Search Change ---
   useEffect(() => {
+    console.log("🔄 Filters or search changed, reloading properties")
     setPage(1)
     loadProperties(1, false)
-  }, [filters, loadProperties])
+  }, [filters, searchQuery, loadProperties])
 
   // --- Infinite Scroll ---
   useEffect(() => {
@@ -75,17 +125,28 @@ export default function PropertiesPage() {
   // --- Load More on Page Change ---
   useEffect(() => {
     if (page > 1) {
+      console.log("📄 Loading more properties, page:", page)
       loadProperties(page, true)
     }
   }, [page, loadProperties])
 
-  // --- Confetti on Clear Filters ---
-  const clearFiltersWithConfetti = () => {
+  // --- Clear All Filters ---
+  const clearAllFilters = () => {
+    console.log("🧹 Clearing all filters")
     setFilters({})
+    setSearchQuery("")
     import("canvas-confetti").then(confetti => {
       confetti.default({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
     })
   }
+
+  // Get active filter count for badge
+  const activeFilterCount = Object.keys(filters).filter(key => {
+    if (key === 'priceRange') {
+      return filters.priceRange && (filters.priceRange.min !== undefined || filters.priceRange.max !== undefined)
+    }
+    return filters[key as keyof Filters] !== undefined && filters[key as keyof Filters] !== ''
+  }).length + (searchQuery ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-background overflow-x-hidden">
@@ -109,7 +170,7 @@ export default function PropertiesPage() {
           className="bg-card/95 backdrop-blur-xl rounded-3xl border-2 border-border p-8 mb-10 shadow-2xl"
         >
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div>
+            <div className="flex-1">
               <h1 className="text-5xl md:text-6xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
                 Browse Properties
               </h1>
@@ -119,7 +180,12 @@ export default function PropertiesPage() {
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5 text-primary" />
-                    <strong>{properties.length}+</strong> dream homes available
+                    <strong>{properties.length}+</strong> homes available
+                    {activeFilterCount > 0 && (
+                      <span className="ml-2 text-sm bg-primary text-primary-foreground px-2 py-1 rounded-full">
+                        {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
+                      </span>
+                    )}
                   </>
                 )}
                 {isAuthenticated && (
@@ -156,7 +222,7 @@ export default function PropertiesPage() {
               <Button
                 variant={showFilters ? "default" : "outline"}
                 onClick={() => setShowFilters(!showFilters)}
-                className="gap-2 font-semibold h-10 px-5 rounded-xl shadow-lg hover:shadow-xl transition-all"
+                className="gap-2 font-semibold h-10 px-5 rounded-xl shadow-lg hover:shadow-xl transition-all relative"
               >
                 <motion.div
                   animate={{ rotate: showFilters ? 180 : 0 }}
@@ -165,6 +231,11 @@ export default function PropertiesPage() {
                   <SlidersHorizontal className="h-5 w-5" />
                 </motion.div>
                 Filters
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
               </Button>
             </div>
           </div>
@@ -187,13 +258,19 @@ export default function PropertiesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={clearFiltersWithConfetti}
+                      onClick={clearAllFilters}
                       className="text-primary hover:text-primary/80"
+                      disabled={activeFilterCount === 0}
                     >
-                      Clear
+                      Clear All
                     </Button>
                   </div>
-                  <PropertyFilters filters={filters} onFiltersChange={setFilters} />
+                  <PropertyFilters 
+                    filters={filters} 
+                    onFiltersChange={setFilters}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                  />
                 </div>
               </motion.div>
             )}
@@ -232,14 +309,16 @@ export default function PropertiesPage() {
                     <SlidersHorizontal className="h-10 w-10 text-primary" />
                   </motion.div>
                   <h3 className="text-2xl font-bold mb-3">No properties found</h3>
-                  <p className="text-muted-foreground mb-8">Try adjusting your filters to see more results</p>
+                  <p className="text-muted-foreground mb-8">
+                    {searchQuery ? `No results for "${searchQuery}"` : "Try adjusting your filters to see more results"}
+                  </p>
                   <Button
                     size="lg"
-                    onClick={clearFiltersWithConfetti}
+                    onClick={clearAllFilters}
                     className="gap-2 font-semibold shadow-lg hover:shadow-xl"
                   >
                     <Sparkles className="h-5 w-5" />
-                    Clear Filters
+                    Clear All Filters
                   </Button>
                 </div>
               </motion.div>
@@ -248,21 +327,21 @@ export default function PropertiesPage() {
                 layout
                 className={`grid gap-6 ${viewMode === "grid" ? "md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}
               >
-               <AnimatePresence>
-  {properties.map((property, i) => (
-    <motion.div
-      key={`${property.id}-${i}`}
-      layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ delay: i * 0.05 }}
-      ref={i === properties.length - 1 ? lastPropertyRef : null}
-    >
-      <PropertyCard property={property} viewMode={viewMode} />
-    </motion.div>
-  ))}
-</AnimatePresence>
+                <AnimatePresence>
+                  {properties.map((property, i) => (
+                    <motion.div
+                      key={`${property.id}-${i}`}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ delay: i * 0.05 }}
+                      ref={i === properties.length - 1 ? lastPropertyRef : null}
+                    >
+                      <PropertyCard property={property} viewMode={viewMode} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </motion.div>
             )}
 

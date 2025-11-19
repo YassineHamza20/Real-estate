@@ -293,8 +293,7 @@ export function SellerDashboard() {
         {[
           { title: "Active", value: activeListings, sub: `${myListings.length} total`, icon: Home },
           { title: "Saved", value: savedProperties.length, sub: "Wishlist", icon: Heart },
-          { title: "Offers", value: 8, sub: "3 pending", icon: DollarSign },
-          { title: "Messages", value: 15, sub: "5 unread", icon: MessageSquare },
+          
         ].map((stat, i) => (
           <motion.div
             key={i}

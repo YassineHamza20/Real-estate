@@ -201,7 +201,7 @@ export default function PropertyDetailPage() {
                     
                     {/* Primary Image Badge */}
                     {sortedImages[currentImg]?.is_primary && (
-                      <div className="absolute top-4 left-4 bg-blue-600 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 backdrop-blur-md">
+                      <div className="absolute top-4 left-4 bg-black-800 text-black px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 backdrop-blur-md">
                         <Star className="h-4 w-4 fill-current" />
                         Primary
                       </div>
@@ -278,7 +278,7 @@ export default function PropertyDetailPage() {
                       
                       {/* Primary Badge on Thumbnail */}
                       {img.is_primary && (
-                        <div className="absolute top-1 right-1 bg-blue-600 text-white p-1 rounded-full">
+                        <div className="absolute top-1 right-1 bg-black-800 text-black p-1 rounded-full">
                           <Star className="h-3 w-3 fill-current" />
                         </div>
                       )}
@@ -307,7 +307,7 @@ export default function PropertyDetailPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     size="icon"
                     className={cn("h-12 w-12 rounded-xl shadow-lg", isSaved && "bg-primary text-white")}
@@ -319,10 +319,10 @@ export default function PropertyDetailPage() {
                     >
                       <Heart className={cn("h-5 w-5", isSaved && "fill-current")} />
                     </motion.div>
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl shadow-lg">
+                  </Button> */}
+                  {/* <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl shadow-lg">
                     <Share2 className="h-5 w-5" />
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
 

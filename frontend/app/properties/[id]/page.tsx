@@ -22,6 +22,7 @@ import confetti from "canvas-confetti"
 import { cn } from "@/lib/utils"
 import { RealMap } from "@/components/RealMap"
 import { SimilarProperties } from "@/components/similar-properties"
+
 export default function PropertyDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -35,6 +36,7 @@ export default function PropertyDetailPage() {
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const [isImageModalOpen, setIsImageModalOpen] = useState(false)
   const [modalImageIndex, setModalImageIndex] = useState(0)
+  const [isSharing, setIsSharing] = useState(false)
 
   const [sellerContact, setSellerContact] = useState<{
     first_name: string
@@ -96,6 +98,42 @@ export default function PropertyDetailPage() {
   }, [user, property])
 
   /* ------------------------------------------------- */
+  // Share functionality
+  const handleShare = async () => {
+    setIsSharing(true)
+    try {
+      const url = window.location.href
+      await navigator.clipboard.writeText(url)
+      
+      // Show success feedback
+      setIsSaved(true)
+      confetti({
+        particleCount: 60,
+        spread: 70,
+        origin: { x: 0.1, y: 0.1 },
+        colors: ["#3b82f6", "#60a5fa", "#93c5fd"]
+      })
+      
+      setTimeout(() => {
+        setIsSaved(false)
+      }, 2000)
+    } catch (err) {
+      console.error('Failed to copy URL: ', err)
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = window.location.href
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      
+      setIsSaved(true)
+      setTimeout(() => setIsSaved(false), 2000)
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
   // Wishlist functionality
   const checkWishlistStatus = async (propertyId: string) => {
     try {
@@ -172,18 +210,6 @@ export default function PropertyDetailPage() {
 
   const closeImageModal = () => {
     setIsImageModalOpen(false)
-  }
-
-  const handleSave = () => {
-    setIsSaved(true)
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { x: 0.9, y: 0.8 },
-      colors: ["#f59e0b", "#10b981", "#3b82f6"]
-    })
-    if ("vibrate" in navigator) navigator.vibrate?.([50, 30, 50])
-    setTimeout(() => setIsSaved(false), 2000)
   }
 
   /* ------------------------------------------------- */
@@ -332,37 +358,69 @@ export default function PropertyDetailPage() {
                   {currentImg + 1} / {totalImages}
                 </div>
 
-                {/* Wishlist Button - Top Right */}
-                <motion.div
-                  className="absolute top-4 right-20"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      "h-12 w-12 rounded-xl shadow-lg backdrop-blur-md border-white/20",
-                      isWishlisted && "bg-yellow-500 text-white border-yellow-500",
-                      wishlistLoading && "opacity-50 cursor-not-allowed"
-                    )}
-                    onClick={(e) => {
-                      e.stopPropagation() // Prevent triggering the image modal
-                      toggleWishlist()
-                    }}
-                    disabled={wishlistLoading}
+                {/* Action Buttons - Top Right */}
+                <div className="absolute top-4 right-4 flex gap-2">
+                  {/* Share Button */}
+                  <motion.div
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                   >
-                    <motion.div
-                      animate={{ 
-                        scale: isWishlisted ? [1, 1.3, 1] : 1,
-                        rotate: isWishlisted ? [0, 10, -10, 0] : 0
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        "h-12 w-12 rounded-xl shadow-lg backdrop-blur-md border-white/20",
+                        isSharing && "opacity-50 cursor-not-allowed",
+                        isSaved && "bg-green-500 text-white border-green-500"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation() // Prevent triggering the image modal
+                        handleShare()
                       }}
-                      transition={{ duration: 0.5 }}
+                      disabled={isSharing}
                     >
-                      <Heart className={cn("h-5 w-5", isWishlisted && "fill-current")} />
-                    </motion.div>
-                  </Button>
-                </motion.div>
+                      <motion.div
+                        animate={{ 
+                          scale: isSaved ? [1, 1.3, 1] : 1,
+                        }}
+                        transition={{ duration: 0.5 }}
+                      >
+                        {isSaved ? <Check className="h-5 w-5" /> : <Share2 className="h-5 w-5" />}
+                      </motion.div>
+                    </Button>
+                  </motion.div>
+
+                  {/* Wishlist Button */}
+                  <motion.div
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        "h-12 w-12 rounded-xl shadow-lg backdrop-blur-md border-white/20",
+                        isWishlisted && "bg-yellow-500 text-white border-yellow-500",
+                        wishlistLoading && "opacity-50 cursor-not-allowed"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation() // Prevent triggering the image modal
+                        toggleWishlist()
+                      }}
+                      disabled={wishlistLoading}
+                    >
+                      <motion.div
+                        animate={{ 
+                          scale: isWishlisted ? [1, 1.3, 1] : 1,
+                          rotate: isWishlisted ? [0, 10, -10, 0] : 0
+                        }}
+                        transition={{ duration: 0.5 }}
+                      >
+                        <Heart className={cn("h-5 w-5", isWishlisted && "fill-current")} />
+                      </motion.div>
+                    </Button>
+                  </motion.div>
+                </div>
 
                 {/* Left Arrow */}
                 {totalImages > 1 && (
@@ -449,7 +507,6 @@ export default function PropertyDetailPage() {
               )}
             </motion.div>
 
-            {/* Rest of your existing content remains the same */}
             {/* Description Card */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -469,7 +526,21 @@ export default function PropertyDetailPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  {/* Share button can be added here if needed */}
+                  {/* Additional share button in header if needed */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "gap-2",
+                      isSharing && "opacity-50 cursor-not-allowed",
+                      isSaved && "bg-green-500 text-white border-green-500"
+                    )}
+                    onClick={handleShare}
+                    disabled={isSharing}
+                  >
+                    {isSaved ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+                    {isSaved ? "Copied!" : "Share"}
+                  </Button>
                 </div>
               </div>
 
@@ -479,7 +550,7 @@ export default function PropertyDetailPage() {
                 </Badge>
                 <Badge
                   variant={property.status === "active" ? "default" : "secondary"}
-                  className="text-base px-4py-1.5 capitalize font-medium"
+                  className="text-base px-4 py-1.5 capitalize font-medium"
                 >
                   {property.status}
                 </Badge>
@@ -618,6 +689,7 @@ export default function PropertyDetailPage() {
                                     <p className="font-medium">Call Now</p>
                                     <p className="text-sm text-muted-foreground">{sellerContact.phone}</p>
                                   </div>
+                                  
                                 </div>
                               </motion.a>
                             )}
@@ -644,9 +716,12 @@ export default function PropertyDetailPage() {
                           </div>
                         )}
                       </div>
+                      
                     </div>
+                    
                   ) : (
                     <div className="space-y-4">
+                    
                       <Button
                         className="w-full h-14 text-lg font-semibold shadow-lg"
                         size="lg"
@@ -663,7 +738,6 @@ export default function PropertyDetailPage() {
               </Card>
             </motion.div>
           </div>
-          
         </div>
       </div>
 

@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { Property } from "@/types/property"
-import { MapPin, Bed, Square, Heart, Eye } from "lucide-react"
+import { MapPin, Bed, Square, Heart } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { propertiesApi } from "@/lib/api/properties"
@@ -16,18 +16,19 @@ interface PropertyCardProps {
   property: Property
   viewMode?: "grid" | "list"
   onWishlistUpdate?: () => void
+  compact?: boolean
 }
 
-export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: PropertyCardProps) {
+export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate, compact = false }: PropertyCardProps) {
   const { user, isAuthenticated, logout } = useAuth()
   const { toast } = useToast()
-  const [isInWishlist, setIsInWishlist] = useState(property.inWishlist)
+  const [isInWishlist, setIsInWishlist] = useState(property.inWishlist || false)
   const [isLoading, setIsLoading] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
-    console.log(`PropertyCard ${property.id}: Syncing state with prop - inWishlist = ${property.inWishlist}`)
-    setIsInWishlist(property.inWishlist)
-  }, [property.inWishlist, property.id])
+    setIsInWishlist(property.inWishlist || false)
+  }, [property.inWishlist])
 
   const handleWishlistToggle = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -45,9 +46,7 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
     setIsLoading(true)
     try {
       const response = await propertiesApi.toggleWishlist(property.id)
-      console.log('Wishlist toggle response:', response)
       
-      // Update the state based on backend response
       setIsInWishlist(response.in_wishlist)
       
       toast({
@@ -55,17 +54,8 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
         description: response.in_wishlist ? "Property added to your wishlist" : "Property removed from your wishlist",
       })
       
-      // Refresh the wishlist status to ensure it's in sync
       if (onWishlistUpdate) {
         onWishlistUpdate()
-      } else {
-        // If no callback provided, manually refresh the status
-        try {
-          const updatedStatus = await propertiesApi.checkWishlistStatus(property.id)
-          setIsInWishlist(updatedStatus.in_wishlist)
-        } catch (error) {
-          console.error('Failed to refresh wishlist status:', error)
-        }
       }
     } catch (error: any) {
       console.error("Failed to toggle wishlist:", error)
@@ -100,6 +90,13 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
     return new Intl.NumberFormat('de-DE').format(sqm)
   }
 
+  const getImageSrc = () => {
+    if (imageError || !property.images?.[0]?.url) {
+      return "/placeholder.svg"
+    }
+    return property.images[0].url
+  }
+
   if (viewMode === "list") {
     return (
       <Card className="overflow-hidden hover:shadow-lg transition-all border-2 hover:border-primary/50 cursor-pointer">
@@ -108,10 +105,12 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
             <div className="md:w-80 flex-shrink-0">
               <div className="relative h-48 md:h-full overflow-hidden">
                 <Image
-                  src={property.images[0]?.url || "/placeholder.svg"}
+                  src={getImageSrc()}
                   alt={`${property.name} in ${property.city}`}
                   fill
                   className="object-cover hover:scale-105 transition-transform duration-300"
+                  onError={() => setImageError(true)}
+                  priority={false}
                 />
                 <div className="absolute top-3 left-3">
                   <Badge
@@ -155,7 +154,6 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
                 <Badge variant="outline" className="text-sm capitalize">
                   {property.type}
                 </Badge>
-                {/* Only show wishlist button if user is authenticated */}
                 {isAuthenticated && (
                   <Button
                     variant="ghost"
@@ -176,18 +174,20 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
     )
   }
 
+  // Grid view (compact or normal)
   return (
-    <Card className="overflow-hidden hover:shadow-xl transition-all border-2 hover:border-primary/50 group cursor-pointer">
-      <Link href={`/properties/${property.id}`} className="block">
-        <div className="relative h-56 overflow-hidden">
+    <Card className="overflow-hidden hover:shadow-xl transition-all border-2 hover:border-primary/50 group cursor-pointer h-full flex flex-col">
+      <Link href={`/properties/${property.id}`} className="block flex-1 flex flex-col">
+        <div className="relative h-48 overflow-hidden">
           <Image
-            src={property.images[0]?.url || "/placeholder.svg"}
+            src={getImageSrc()}
             alt={`${property.name} in ${property.city}`}
             fill
             className="object-cover group-hover:scale-110 transition-transform duration-500"
+            onError={() => setImageError(true)}
+            priority={false}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          {/* Only show wishlist button if user is authenticated */}
           {isAuthenticated && (
             <div className="absolute top-3 right-3">
               <Button
@@ -208,42 +208,41 @@ export function PropertyCard({ property, viewMode = "grid", onWishlistUpdate }: 
           </div>
         </div>
 
-        <CardContent className="p-5">
-          <div className="mb-3">
-            <p className="text-2xl font-bold text-primary">{formatPrice(property.price)}</p>
+        <CardContent className="p-4 flex-1">
+          <div className="mb-2">
+            <p className="text-xl font-bold text-primary">{formatPrice(property.price)}</p>
             <p className="text-xs text-muted-foreground">
               {Math.round(property.price / property.squareMeters).toLocaleString('de-DE')} €/m²
             </p>
           </div>
-          <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
+          <h3 className="font-semibold text-base mb-1 line-clamp-1 group-hover:text-primary transition-colors">
             {property.name}
           </h3>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-            <MapPin className="h-4 w-4 flex-shrink-0" />
-            <span className="line-clamp-1">
-              {property.city}
-            </span>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+            <MapPin className="h-3 w-3 flex-shrink-0" />
+            <span className="line-clamp-1">{property.city}</span>
           </div>
-          <p className="text-sm text-muted-foreground line-clamp-2">
-            {property.description}
-          </p>
+          {!compact && (
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {property.description}
+            </p>
+          )}
         </CardContent>
 
-        <CardFooter className="p-5 pt-0 flex items-center justify-between text-sm border-t bg-muted/30">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <Bed className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{property.bedrooms}</span>
+        <CardFooter className="p-4 pt-0 flex items-center justify-between text-sm border-t bg-muted/30 mt-auto">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <Bed className="h-3 w-3 text-muted-foreground" />
+              <span className="font-medium text-xs">{property.bedrooms}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Square className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{formatSquareMeters(property.squareMeters)} m²</span>
+            <div className="flex items-center gap-1">
+              <Square className="h-3 w-3 text-muted-foreground" />
+              <span className="font-medium text-xs">{formatSquareMeters(property.squareMeters)} m²</span>
             </div>
           </div>
-          {/* <Button variant="outline" size="sm" className="gap-1">
-            <Eye className="h-3 w-3" />
-            View
-          </Button> */}
+          <Badge variant="outline" className="text-xs capitalize">
+            {property.type}
+          </Badge>
         </CardFooter>
       </Link>
     </Card>

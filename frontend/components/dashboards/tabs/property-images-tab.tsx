@@ -13,7 +13,11 @@ import { useAuth } from "@/contexts/auth-context"
 import { propertyImagesApi } from "@/lib/api/Adminproperty-images"
 import { 
   Search, MoreVertical, Star, Trash2, Loader2, Eye, 
-  Image as ImageIcon, User, MapPin, Euro, Home, Calendar, RefreshCw, CheckCircle, XCircle
+  Image as ImageIcon, User, MapPin, Euro, Home, Calendar, RefreshCw, CheckCircle, XCircle,
+  Download,
+  FileText,
+  Table as TableIcon,
+  Image
 } from "lucide-react"
 import { toast } from "sonner"
 import { PropertyImageModal } from "../modals/property-image-modal" // Changed to relative import
@@ -25,7 +29,8 @@ export function PropertyImagesTab() {
   const [stats, setStats] = useState<PropertyImagesStats | null>(null)
   const [loading, setLoading] = useState({
     images: false,
-    stats: false
+    stats: false,
+    export: false
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -36,6 +41,306 @@ export function PropertyImagesTab() {
 
   // Selected images for bulk actions
   const [selectedImages, setSelectedImages] = useState<number[]>([])
+
+  // Export functionality
+  const exportToPDF = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      const { jsPDF } = await import('jspdf')
+      
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      // Set document properties
+      doc.setProperties({
+        title: `Property Images Report - ${new Date().toLocaleDateString()}`,
+        subject: 'Property Images Export',
+        author: user?.username || 'Admin User',
+        creator: 'Real Estate Platform',
+        keywords: 'property images, real estate, export'
+      })
+
+      // Add header
+      doc.setFillColor(59, 130, 246)
+      doc.rect(0, 0, 297, 20, 'F')
+      
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(16)
+      doc.setFont(undefined, 'bold')
+      doc.text('REAL ESTATE PLATFORM - PROPERTY IMAGES REPORT', 20, 12)
+
+      // Generation info
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      doc.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 20, 18)
+      doc.text(`By: ${user?.username || 'Admin User'}`, 200, 18)
+
+      let yPosition = 30
+
+      // Summary section
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(12)
+      doc.setFont(undefined, 'bold')
+      doc.text('SUMMARY', 20, yPosition)
+      
+      yPosition += 8
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      const summaryText = `Total Images: ${images.length} | Primary: ${images.filter(img => img.is_primary).length} | Secondary: ${images.filter(img => !img.is_primary).length}`
+      doc.text(summaryText, 20, yPosition)
+
+      yPosition += 15
+
+      // Table headers
+      const headers = ['ID', 'Property', 'City', 'Price', 'Seller', 'Status', 'Uploaded' ]
+      const columnWidths = [15, 40, 30, 30, 35, 25, 30, 52]
+      
+      let xPosition = 20
+      doc.setFillColor(240, 240, 240)
+      doc.rect(xPosition, yPosition, 200, 8, 'F')
+      
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(8)
+      doc.setFont(undefined, 'bold')
+      
+      headers.forEach((header, index) => {
+        doc.text(header, xPosition + 2, yPosition + 6)
+        xPosition += columnWidths[index]
+      })
+
+      yPosition += 8
+
+      // Table rows
+      doc.setFont(undefined, 'normal')
+      images.forEach((image, index) => {
+        if (yPosition > 180) {
+          doc.addPage()
+          yPosition = 30
+          
+          // Add headers to new page
+          xPosition = 20
+          doc.setFillColor(240, 240, 240)
+          doc.rect(xPosition, yPosition, 257, 8, 'F')
+          doc.setTextColor(0, 0, 0)
+          doc.setFontSize(8)
+          doc.setFont(undefined, 'bold')
+          
+          headers.forEach((header, index) => {
+            doc.text(header, xPosition + 2, yPosition + 6)
+            xPosition += columnWidths[index]
+          })
+          yPosition += 8
+        }
+
+        xPosition = 20
+        const rowData = [
+          image.id.toString(),
+          image.property.name,
+          image.property.city,
+          formatPrice(image.property.price),
+          image.seller.username,
+          image.is_primary ? 'Primary' : 'Secondary',
+          formatDate(image.uploaded_at),
+         
+        ]
+
+        doc.setFontSize(7)
+        rowData.forEach((data, dataIndex) => {
+          const lines = doc.splitTextToSize(data, columnWidths[dataIndex] - 2)
+          lines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, xPosition + 1, yPosition + 4 + (lineIndex * 3))
+          })
+          xPosition += columnWidths[dataIndex]
+        })
+
+        yPosition += 15
+      })
+
+      // Footer
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setTextColor(150, 150, 150)
+        doc.setFontSize(8)
+        doc.text(`Page ${i} of ${pageCount}`, 150, 200, { align: 'center' })
+        doc.text(`Real Estate Platform - ${new Date().getFullYear()}`, 20, 290)
+      }
+
+      doc.save(`property-images-report-${new Date().toISOString().split('T')[0]}.pdf`)
+      
+      toast.success("Property images data has been exported to PDF")
+    } catch (error) {
+      console.error('Error exporting to PDF:', error)
+      toast.error("Could not generate PDF export")
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
+
+  const exportToExcel = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      const csvContent = [
+        // Header
+        ['Property Images Export', '', '', '', '', '', '', ''],
+        [`Generated,${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`],
+        [`By,${user?.username || 'Admin'}`],
+        [''],
+        
+        // Data headers
+        ['Image ID', 'Property ID', 'Property Name', 'Property Type', 'City', 'Address', 'Price', 'Rooms', 'Size', 'Seller ID', 'Seller Username', 'Seller Email', 'Image URL', 'Is Primary', 'Uploaded At'],
+        
+        // Data rows
+        ...images.map(image => [
+          image.id,
+          image.property.id,
+          `"${image.property.name}"`,
+          image.property.property_type,
+          `"${image.property.city}"`,
+          `"${image.property.address}"`,
+          image.property.price,
+          image.property.number_of_rooms,
+          image.property.size,
+          image.seller.id,
+          `"${image.seller.username}"`,
+          `"${image.seller.email}"`,
+          `"${image.image_url}"`,
+          image.is_primary ? 'Yes' : 'No',
+          image.uploaded_at
+        ]),
+        [''],
+        ['Summary', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+        [`Total Images,${images.length}`],
+        [`Primary Images,${images.filter(img => img.is_primary).length}`],
+        [`Secondary Images,${images.filter(img => !img.is_primary).length}`],
+        [`Properties with Images,${stats?.properties_with_images || 0}`],
+        [`Properties without Images,${stats?.properties_without_images || 0}`],
+        [`Recent Images (7d),${stats?.recent_images || 0}`]
+      ].map(row => row.join(',')).join('\n')
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      
+      link.setAttribute('href', url)
+      link.setAttribute('download', `property-images-${new Date().toISOString().split('T')[0]}.csv`)
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast.success("Property images data exported successfully")
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      toast.error("Could not generate Excel export")
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
+
+  const exportToPNG = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      // Create a canvas element
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      
+      // Set canvas size
+      canvas.width = 1400
+      canvas.height = 1000
+      
+      // Background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
+      // Header
+      ctx.fillStyle = '#1e40af'
+      ctx.fillRect(0, 0, canvas.width, 60)
+      
+      // Title
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 24px Arial'
+      ctx.fillText('Real Estate Platform - Property Images Report', 20, 35)
+      
+      // Generation info
+      ctx.fillStyle = '#666666'
+      ctx.font = '14px Arial'
+      ctx.fillText(`Generated on ${new Date().toLocaleDateString()} by ${user?.username || 'Admin'}`, 20, 85)
+      
+      // Summary
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 16px Arial'
+      ctx.fillText(`Total Images: ${images.length} | Primary: ${images.filter(img => img.is_primary).length} | Secondary: ${images.filter(img => !img.is_primary).length}`, 20, 115)
+      
+      let yPos = 150
+      const rowHeight = 30
+      const headers = ['Property', 'City', 'Price', 'Seller', 'Status', 'Uploaded']
+      const columnWidths = [300, 150, 150, 200, 150, 150]
+      
+      // Table headers
+      ctx.fillStyle = '#f3f4f6'
+      ctx.fillRect(20, yPos, canvas.width - 40, rowHeight)
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 12px Arial'
+      
+      let xPos = 25
+      headers.forEach((header, index) => {
+        ctx.fillText(header, xPos, yPos + 20)
+        xPos += columnWidths[index]
+      })
+      
+      yPos += rowHeight
+      
+      // Table rows
+      ctx.font = '11px Arial'
+      images.slice(0, 25).forEach((image, index) => { // Limit to 25 rows for PNG
+        if (index % 2 === 0) {
+          ctx.fillStyle = '#fafafa'
+          ctx.fillRect(20, yPos, canvas.width - 40, rowHeight)
+        }
+        
+        ctx.fillStyle = '#333333'
+        xPos = 25
+        
+        const rowData = [
+          image.property.name.length > 35 ? image.property.name.substring(0, 35) + '...' : image.property.name,
+          image.property.city,
+          formatPrice(image.property.price),
+          image.seller.username,
+          image.is_primary ? 'Primary' : 'Secondary',
+          formatDate(image.uploaded_at)
+        ]
+        
+        rowData.forEach((data, dataIndex) => {
+          ctx.fillText(data, xPos, yPos + 20)
+          xPos += columnWidths[dataIndex]
+        })
+        
+        yPos += rowHeight
+      })
+      
+      // Footer
+      ctx.fillStyle = '#666666'
+      ctx.font = '10px Arial'
+      ctx.fillText(`Real Estate Platform - ${new Date().getFullYear()} | Page 1 of 1`, 20, 950)
+      
+      // Convert to PNG and download
+      const link = document.createElement('a')
+      link.download = `property-images-snapshot-${new Date().toISOString().split('T')[0]}.png`
+      link.href = canvas.toDataURL('image/png', 1.0)
+      link.click()
+      
+      toast.success("Property images snapshot has been saved as PNG")
+    } catch (error) {
+      console.error('Error exporting to PNG:', error)
+      toast.error("Could not generate PNG export")
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
 
   // Fetch images and stats
   const fetchData = useCallback(async () => {
@@ -205,6 +510,49 @@ export function PropertyImagesTab() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* Export Button */}
+          <div className="relative group">
+            <Button 
+             
+              size="sm"
+              disabled={loading.export || images.length === 0}
+              className="rounded-lg border-2 hover:border-primary/50 transition-all duration-300"
+            >
+              <Download className={`h-4 w-4 mr-2 ${loading.export ? 'animate-spin' : ''}`} />
+              Export Data
+            </Button>
+            
+            {/* Export Options Dropdown */}
+            <div className="absolute right-0 top-full mt-1 w-48 bg-background border-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+              <div className="p-2 space-y-1">
+                <button
+                  onClick={exportToPDF}
+                  disabled={loading.export || images.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <FileText className="h-4 w-4 text-red-500" />
+                  {loading.export ? 'Generating...' : 'Export as PDF'}
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  disabled={loading.export || images.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <TableIcon className="h-4 w-4 text-green-500" />
+                  {loading.export ? 'Generating...' : 'Export as Excel'}
+                </button>
+                <button
+                  onClick={exportToPNG}
+                  disabled={loading.export || images.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <Image className="h-4 w-4 text-blue-500" />
+                  {loading.export ? 'Generating...' : 'Export as PNG'}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Search */}
           <div className="relative flex-1 sm:flex-initial">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -251,6 +599,8 @@ export function PropertyImagesTab() {
           </div>
         </div>
       </div>
+
+      
 
       {/* Bulk Actions */}
       {selectedImages.length > 0 && (

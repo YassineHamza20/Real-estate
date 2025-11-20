@@ -14,7 +14,7 @@ import {
   Users, Home, DollarSign, TrendingUp, Search, MoreVertical, 
   CheckCircle, XCircle, Loader2, Plus, RefreshCw, Shield, 
   UserCheck, UserX, Mail, Phone, Trash2,Calendar, Edit, Save, X,
-  Eye, Shield as StaffIcon, Verified, Clock, User,
+  Eye, Shield as StaffIcon, Verified, Clock, User,Image,Download,
   FileText
 } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -183,7 +183,7 @@ export function UsersTab() {
     is_staff: false,
     email_verified: false
   })
-
+const [exportLoading, setExportLoading] = useState<string | null>(null)
   // User detail modal state
   const [selectedUser, setSelectedUser] = useState<UserFullDetail | null>(null)
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false)
@@ -230,7 +230,388 @@ const [userToDelete, setUserToDelete] = useState<{id: number; username: string} 
       setCreatingUser(false)
     }
   }
+
+ 
+// Enhanced PDF Export for Users
+const exportToPDF = async () => {
+  setExportLoading('pdf')
+  try {
+    const { jsPDF } = await import('jspdf')
+    
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+
+    // Header
+    doc.setFillColor(59, 130, 246)
+    doc.rect(0, 0, 210, 25, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(16)
+    doc.setFont(undefined, 'bold')
+    doc.text('USERS MANAGEMENT REPORT', 20, 15)
+    
+    // Generation info
+    doc.setFontSize(10)
+    doc.setFont(undefined, 'normal')
+    doc.text(`Generated on ${new Date().toLocaleDateString()} by ${currentUser?.username || 'Admin'}`, 20, 22)
+
+    let yPosition = 40
+
+    // User Statistics
+    doc.setTextColor(0, 0, 0)
+    doc.setFontSize(14)
+    doc.setFont(undefined, 'bold')
+    doc.text('USER STATISTICS', 15, yPosition)
+    
+    yPosition += 10
+
+    const stats = [
+      { label: 'Total Users', value: userStats.totalUsers },
+      { label: 'Active Users', value: userStats.activeUsers },
+      { label: 'Buyers', value: userStats.totalBuyers },
+      { label: 'Sellers', value: userStats.totalSellers },
+      { label: 'Admins', value: userStats.totalAdmins }
+    ]
+
+    stats.forEach((stat, index) => {
+      if (yPosition > 270) {
+        doc.addPage()
+        yPosition = 30
+      }
+
+      doc.setFillColor(248, 250, 252)
+      doc.rect(15, yPosition, 180, 8, 'F')
+      
+      doc.setTextColor(71, 85, 105)
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'bold')
+      doc.text(stat.label, 20, yPosition + 6)
+
+      doc.setTextColor(15, 23, 42)
+      doc.text(stat.value.toString(), 170, yPosition + 6, { align: 'right' })
+
+      yPosition += 10
+    })
+
+    yPosition += 15
+
+    // User List
+    if (yPosition > 200) {
+      doc.addPage()
+      yPosition = 30
+    }
+
+    doc.setTextColor(15, 23, 42)
+    doc.setFontSize(14)
+    doc.setFont(undefined, 'bold')
+    doc.text('USER LIST', 15, yPosition)
+    
+    yPosition += 10
+
+    // Table headers
+    doc.setFillColor(59, 130, 246)
+    doc.rect(15, yPosition, 180, 8, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(9)
+    doc.text('User', 20, yPosition + 6)
+    doc.text('Email', 70, yPosition + 6)
+    doc.text('Role', 130, yPosition + 6)
+    doc.text('Status', 160, yPosition + 6)
+    
+    yPosition += 10
+
+    // User rows
+    users.slice(0, 20).forEach((user, index) => {
+      if (yPosition > 270) {
+        doc.addPage()
+        yPosition = 30
+        
+        // Repeat headers on new page
+        doc.setFillColor(59, 130, 246)
+        doc.rect(15, yPosition, 180, 8, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(9)
+        doc.text('User', 20, yPosition + 6)
+        doc.text('Email', 70, yPosition + 6)
+        doc.text('Role', 130, yPosition + 6)
+        doc.text('Status', 160, yPosition + 6)
+        yPosition += 10
+      }
+
+      // Alternate row colors
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 250, 252)
+        doc.rect(15, yPosition, 180, 8, 'F')
+      }
+
+      doc.setTextColor(15, 23, 42)
+      doc.setFontSize(8)
+      
+      // User name (truncate if too long)
+      const userName = user.first_name && user.last_name 
+        ? `${user.first_name} ${user.last_name}`.substring(0, 20)
+        : user.username.substring(0, 20)
+      doc.text(userName, 20, yPosition + 6)
+      
+      // Email (truncate)
+      doc.text(user.email.substring(0, 25), 70, yPosition + 6)
+      
+      // Role
+      doc.text(user.role, 130, yPosition + 6)
+      
+      // Status
+      doc.text(user.is_active ? 'Active' : 'Inactive', 160, yPosition + 6)
+
+      yPosition += 8
+    })
+
+    // Footer
+    const pageCount = doc.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setTextColor(100, 116, 139)
+      doc.setFontSize(8)
+      doc.text(`Page ${i} of ${pageCount}`, 105, 290, { align: 'center' })
+      doc.text(`Total Users: ${users.length} • Generated ${new Date().toLocaleDateString()}`, 105, 295, { align: 'center' })
+    }
+
+    doc.save(`users-report-${new Date().toISOString().split('T')[0]}.pdf`)
+    
+    toast({
+      title: "PDF Export Complete",
+      description: "Users report has been downloaded",
+      variant: "default",
+    })
+  } catch (error) {
+    console.error('Error exporting to PDF:', error)
+    toast({
+      title: "Export Failed",
+      description: "Could not generate PDF export",
+      variant: "destructive",
+    })
+  } finally {
+    setExportLoading(null)
+  }
+}
+
+// Enhanced Excel Export for Users
+const exportToExcel = async () => {
+  setExportLoading('excel')
+  try {
+    const csvContent = [
+      // Header
+      ['Users Management Report'],
+      [`Generated,${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`],
+      [`By,${currentUser?.username || 'Admin'}`],
+      [''],
+      
+      // Statistics
+      ['STATISTICS'],
+      ['Metric', 'Count'],
+      ['Total Users', userStats.totalUsers],
+      ['Active Users', userStats.activeUsers],
+      ['Buyers', userStats.totalBuyers],
+      ['Sellers', userStats.totalSellers],
+      ['Admins', userStats.totalAdmins],
+      [''],
+      
+      // User List
+      ['USER LIST'],
+      ['ID', 'Username', 'Name', 'Email', 'Role', 'Status', 'Phone', 'Joined Date'],
+      ...users.map(user => [
+        user.id,
+        user.username,
+        user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : 'N/A',
+        user.email,
+        user.role,
+        user.is_active ? 'Active' : 'Inactive',
+        user.phone_number || 'N/A',
+        new Date(user.date_joined).toLocaleDateString()
+      ])
+    ].map(row => row.map(field => `"${field}"`).join(',')).join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    
+    link.setAttribute('href', url)
+    link.setAttribute('download', `users-export-${new Date().toISOString().split('T')[0]}.csv`)
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    toast({
+      title: "Excel Export Complete",
+      description: "Users data exported successfully",
+      variant: "default",
+    })
+  } catch (error) {
+    console.error('Error exporting to Excel:', error)
+    toast({
+      title: "Export Failed",
+      description: "Could not generate Excel export",
+      variant: "destructive",
+    })
+  } finally {
+    setExportLoading(null)
+  }
+}
+
+// Enhanced PNG Export for Users
+const exportToPNG = async () => {
+  setExportLoading('png')
+  try {
+    const createUsersPNG = () => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      
+      canvas.width = 1400
+      canvas.height = 1600
+      
+      // Background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
+      // Header
+      ctx.fillStyle = '#1e40af'
+      ctx.fillRect(0, 0, canvas.width, 80)
+      
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 32px system-ui'
+      ctx.fillText('Users Management Report', 60, 48)
+      
+      // Generation info
+      ctx.fillStyle = '#374151'
+      ctx.font = '20px system-ui'
+      ctx.fillText(`Generated on ${new Date().toLocaleDateString()}`, 60, 120)
+      ctx.fillText(`By: ${currentUser?.username || 'Administrator'}`, 60, 150)
+      
+      let yPos = 200
+
+      // Statistics
+      ctx.fillStyle = '#111827'
+      ctx.font = 'bold 28px system-ui'
+      ctx.fillText('User Statistics', 60, yPos)
+      
+      yPos += 50
+
+      const stats = [
+        { label: 'Total Users', value: userStats.totalUsers, color: '#3b82f6' },
+        { label: 'Active Users', value: userStats.activeUsers, color: '#10b981' },
+        { label: 'Buyers', value: userStats.totalBuyers, color: '#f59e0b' },
+        { label: 'Sellers', value: userStats.totalSellers, color: '#ef4444' },
+        { label: 'Admins', value: userStats.totalAdmins, color: '#8b5cf6' }
+      ]
+
+      stats.forEach((stat, index) => {
+        const x = 60 + (index % 3) * 400
+        const y = yPos + Math.floor(index / 3) * 100
+        
+        // Stat card
+        ctx.fillStyle = '#f8fafc'
+        ctx.fillRect(x, y, 350, 80)
+        ctx.strokeStyle = '#e5e7eb'
+        ctx.strokeRect(x, y, 350, 80)
+        
+        // Accent bar
+        ctx.fillStyle = stat.color
+        ctx.fillRect(x, y, 6, 80)
+        
+        // Content
+        ctx.fillStyle = '#6b7280'
+        ctx.font = 'bold 16px system-ui'
+        ctx.fillText(stat.label, x + 20, y + 30)
+        
+        ctx.fillStyle = '#111827'
+        ctx.font = 'bold 32px system-ui'
+        ctx.fillText(stat.value.toString(), x + 20, y + 65)
+      })
+      
+      yPos += 180
+
+      // User list header
+      ctx.fillStyle = '#111827'
+      ctx.font = 'bold 28px system-ui'
+      ctx.fillText('Recent Users', 60, yPos)
+      
+      yPos += 50
+
+      // User table
+      users.slice(0, 8).forEach((user, index) => {
+        if (yPos > 1400) return
+        
+        const y = yPos + index * 60
+        
+        // Row background
+        if (index % 2 === 0) {
+          ctx.fillStyle = '#f8fafc'
+          ctx.fillRect(60, y, 1280, 50)
+        }
+        
+        // User info
+        ctx.fillStyle = '#111827'
+        ctx.font = '18px system-ui'
+        
+        const userName = user.first_name && user.last_name 
+          ? `${user.first_name} ${user.last_name}`
+          : user.username
+        
+        ctx.fillText(userName.substring(0, 25), 80, y + 20)
+        ctx.fillText(user.email.substring(0, 30), 400, y + 20)
+        ctx.fillText(user.role, 800, y + 20)
+        
+        // Status
+        ctx.fillStyle = user.is_active ? '#10b981' : '#ef4444'
+        ctx.fillText(user.is_active ? 'Active' : 'Inactive', 1000, y + 20)
+        
+        // Joined date
+        ctx.fillStyle = '#6b7280'
+        ctx.font = '14px system-ui'
+        ctx.fillText(new Date(user.date_joined).toLocaleDateString(), 1150, y + 20)
+      })
+      
+      // Footer
+      ctx.fillStyle = '#374151'
+      ctx.font = '16px system-ui'
+      ctx.fillText(`Total Users: ${users.length} • Generated ${new Date().toLocaleDateString()}`, 60, 1550)
+      
+      return canvas
+    }
+    
+    const canvas = createUsersPNG()
+    const link = document.createElement('a')
+    link.download = `users-report-${new Date().toISOString().split('T')[0]}.png`
+    link.href = canvas.toDataURL('image/png', 1.0)
+    link.click()
+    
+    toast({
+      title: "PNG Export Complete",
+      description: "Users report has been saved as PNG",
+      variant: "default",
+    })
+    
+  } catch (error) {
+    console.error('Error exporting to PNG:', error)
+    toast({
+      title: "Export Failed",
+      description: "Could not generate PNG export",
+      variant: "destructive",
+    })
+  } finally {
+    setExportLoading(null)
+  }
+}
+
+
+
+
   // Fetch users
+
+
+
   const fetchUsers = useCallback(async () => {
     if (!token) return
     
@@ -582,6 +963,57 @@ const handleDeleteUser = async (userId: number, username: string) => {
                   className="pl-9 h-10 w-full sm:w-64"
                 />
               </div>
+
+
+              <div className="relative group">
+ 
+  
+  {/* Export Options Dropdown */}
+
+<div className="relative group">
+  <Button 
+    
+    size="sm"
+    disabled={exportLoading !== null}
+    className="gap-2"
+  >
+    <Download className={`h-4 w-4 ${exportLoading ? 'animate-spin' : ''}`} />
+    Export Data
+  </Button>
+  
+  {/* Export Options Dropdown */}
+  <div className="absolute right-0 top-full mt-2 w-48 bg-background border-2 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 transform group-hover:translate-y-0 translate-y-1">
+    <div className="p-2 space-y-1">
+      <button
+        onClick={exportToPDF}
+        disabled={exportLoading !== null}
+        className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <FileText className="h-4 w-4 text-red-500" />
+        {exportLoading === 'pdf' ? 'Generating...' : 'Export as PDF'}
+      </button>
+      <button
+        onClick={exportToExcel}
+        disabled={exportLoading !== null}
+        className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <FileText className="h-4 w-4 text-green-500" />
+        {exportLoading === 'excel' ? 'Generating...' : 'Export as Excel'}
+      </button>
+      <button
+        onClick={exportToPNG}
+        disabled={exportLoading !== null}
+        className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Image className="h-4 w-4 text-blue-500" />
+        {exportLoading === 'png' ? 'Generating...' : 'Export as PNG'}
+      </button>
+    </div>
+  </div>
+</div>
+
+
+</div>
               <Select value={roleFilter} onValueChange={setRoleFilter}>
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Role" />
@@ -613,7 +1045,8 @@ const handleDeleteUser = async (userId: number, username: string) => {
                 Add a new user to the platform. All fields are required.
               </DialogDescription>
             </DialogHeader>
-            
+            {/* Add this with your other header buttons */}
+
             <div className="grid gap-4 py-4">
               {/* Basic Information */}
               <div className="grid grid-cols-2 gap-4">

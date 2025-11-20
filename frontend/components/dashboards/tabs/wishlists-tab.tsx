@@ -11,7 +11,11 @@ import { useAuth } from "@/contexts/auth-context"
 import { adminWishlistsApi, UserWishlist, WishlistStats, WishlistItem } from "@/lib/api/adminWishlists"
 import { 
   Search, MoreVertical, Heart, User, Home, MapPin, Euro, 
-  Calendar, RefreshCw, Trash2, Eye, Users, Package, ImageOff
+  Calendar, RefreshCw, Trash2, Eye, Users, Package, ImageOff,
+  Download,
+  FileText,
+  Table as TableIcon,
+  Image
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { UserWishlistModal } from "../modals/user-wishlist-modal"
@@ -21,7 +25,8 @@ export function WishlistsTab() {
   const [wishlists, setWishlists] = useState<UserWishlist[]>([])
   const [loading, setLoading] = useState({
     wishlists: false,
-    stats: false
+    stats: false,
+    export: false
   })
   const [stats, setStats] = useState<WishlistStats | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -29,6 +34,324 @@ export function WishlistsTab() {
   // Modal state
   const [selectedUserWishlist, setSelectedUserWishlist] = useState<UserWishlist | null>(null)
   const [isWishlistModalOpen, setIsWishlistModalOpen] = useState(false)
+
+  // Export functionality
+  const exportToPDF = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      const { jsPDF } = await import('jspdf')
+      
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      // Set document properties
+      doc.setProperties({
+        title: `Wishlists Report - ${new Date().toLocaleDateString()}`,
+        subject: 'User Wishlists Export',
+        author: 'Admin User',
+        creator: 'Real Estate Platform',
+        keywords: 'wishlists, users, export'
+      })
+
+      // Add header
+      doc.setFillColor(59, 130, 246)
+      doc.rect(0, 0, 297, 20, 'F')
+      
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(16)
+      doc.setFont(undefined, 'bold')
+      doc.text('REAL ESTATE PLATFORM - WISHLISTS REPORT', 20, 12)
+
+      // Generation info
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      doc.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 20, 18)
+      doc.text(`By: Admin User`, 200, 18)
+
+      let yPosition = 30
+
+      // Summary section
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(12)
+      doc.setFont(undefined, 'bold')
+      doc.text('SUMMARY', 20, yPosition)
+      
+      yPosition += 8
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      const summaryText = `Total Wishlists: ${wishlists.length} | Total Items: ${stats?.total_wishlist_items || 0} | Users with Wishlists: ${stats?.total_users_with_wishlists || 0}`
+      doc.text(summaryText, 20, yPosition)
+
+      yPosition += 15
+
+      // Table headers
+      const headers = ['User ID', 'Username', 'Email', 'Total Items', 'Most Recent Property', 'Recent Item Added']
+      const columnWidths = [20, 40, 60, 25, 70, 30]
+      
+      let xPosition = 20
+      doc.setFillColor(240, 240, 240)
+      doc.rect(xPosition, yPosition, 257, 8, 'F')
+      
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(8)
+      doc.setFont(undefined, 'bold')
+      
+      headers.forEach((header, index) => {
+        doc.text(header, xPosition + 2, yPosition + 6)
+        xPosition += columnWidths[index]
+      })
+
+      yPosition += 8
+
+      // Table rows
+      doc.setFont(undefined, 'normal')
+      wishlists.forEach((wishlist, index) => {
+        if (yPosition > 180) {
+          doc.addPage()
+          yPosition = 30
+          
+          // Add headers to new page
+          xPosition = 20
+          doc.setFillColor(240, 240, 240)
+          doc.rect(xPosition, yPosition, 257, 8, 'F')
+          doc.setTextColor(0, 0, 0)
+          doc.setFontSize(8)
+          doc.setFont(undefined, 'bold')
+          
+          headers.forEach((header, index) => {
+            doc.text(header, xPosition + 2, yPosition + 6)
+            xPosition += columnWidths[index]
+          })
+          yPosition += 8
+        }
+
+        xPosition = 20
+        const recentItem = wishlist.wishlist_items[0]
+        const rowData = [
+          wishlist.user.id.toString(),
+          wishlist.user.username,
+          wishlist.user.email,
+          wishlist.total_items.toString(),
+          recentItem ? recentItem.property.name : 'No items',
+          recentItem ? formatDate(recentItem.added_at) : 'N/A'
+        ]
+
+        doc.setFontSize(7)
+        rowData.forEach((data, dataIndex) => {
+          const lines = doc.splitTextToSize(data, columnWidths[dataIndex] - 2)
+          lines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, xPosition + 1, yPosition + 4 + (lineIndex * 3))
+          })
+          xPosition += columnWidths[dataIndex]
+        })
+
+        yPosition += 15
+      })
+
+      // Footer
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setTextColor(150, 150, 150)
+        doc.setFontSize(8)
+        doc.text(`Page ${i} of ${pageCount}`, 150, 200, { align: 'center' })
+        doc.text(`Real Estate Platform - ${new Date().getFullYear()}`, 20, 290)
+      }
+
+      doc.save(`wishlists-report-${new Date().toISOString().split('T')[0]}.pdf`)
+      
+      toast({
+        title: "PDF Export Complete",
+        description: "Wishlists data has been exported to PDF",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error exporting to PDF:', error)
+      toast({
+        title: "Export Failed",
+        description: "Could not generate PDF export",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
+
+  const exportToExcel = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      const csvContent = [
+        // Header
+        ['Wishlists Export', '', '', '', '', ''],
+        [`Generated,${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`],
+        [`By,Admin`],
+        [''],
+        
+        // Data headers
+        ['User ID', 'Username', 'Email', 'Total Items', 'Most Recent Property', 'Recent Property Price', 'Recent Property Type', 'Recent Property City', 'Recent Item Added'],
+        
+        // Data rows
+        ...wishlists.map(wishlist => {
+          const recentItem = wishlist.wishlist_items[0]
+          return [
+            wishlist.user.id,
+            `"${wishlist.user.username}"`,
+            `"${wishlist.user.email}"`,
+            wishlist.total_items,
+            recentItem ? `"${recentItem.property.name}"` : 'No items',
+            recentItem ? recentItem.property.price : '',
+            recentItem ? recentItem.property.property_type : '',
+            recentItem ? recentItem.property.city : '',
+            recentItem ? recentItem.added_at : ''
+          ]
+        }),
+        [''],
+        ['Summary', '', '', '', '', '', '', '', ''],
+        [`Total Wishlists,${wishlists.length}`],
+        [`Total Wishlist Items,${stats?.total_wishlist_items || 0}`],
+        [`Users with Wishlists,${stats?.total_users_with_wishlists || 0}`],
+        [`Most Popular Property,${stats?.most_popular_properties[0]?.property_name || 'N/A'}`],
+        [`Most Popular Property Count,${stats?.most_popular_properties[0]?.wishlist_count || 0}`]
+      ].map(row => row.join(',')).join('\n')
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      
+      link.setAttribute('href', url)
+      link.setAttribute('download', `wishlists-${new Date().toISOString().split('T')[0]}.csv`)
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast({
+        title: "Excel Export Complete",
+        description: "Wishlists data exported successfully",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      toast({
+        title: "Export Failed",
+        description: "Could not generate Excel export",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
+
+  const exportToPNG = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      // Create a canvas element
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      
+      // Set canvas size
+      canvas.width = 1200
+      canvas.height = 800
+      
+      // Background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
+      // Header
+      ctx.fillStyle = '#1e40af'
+      ctx.fillRect(0, 0, canvas.width, 60)
+      
+      // Title
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 24px Arial'
+      ctx.fillText('Real Estate Platform - Wishlists Report', 20, 35)
+      
+      // Generation info
+      ctx.fillStyle = '#666666'
+      ctx.font = '14px Arial'
+      ctx.fillText(`Generated on ${new Date().toLocaleDateString()} by Admin`, 20, 85)
+      
+      // Summary
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 16px Arial'
+      ctx.fillText(`Total Wishlists: ${wishlists.length} | Total Items: ${stats?.total_wishlist_items || 0} | Users with Wishlists: ${stats?.total_users_with_wishlists || 0}`, 20, 115)
+      
+      let yPos = 150
+      const rowHeight = 30
+      const headers = ['Username', 'Items', 'Recent Property', 'Added Date']
+      const columnWidths = [200, 100, 400, 150]
+      
+      // Table headers
+      ctx.fillStyle = '#f3f4f6'
+      ctx.fillRect(20, yPos, canvas.width - 40, rowHeight)
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 12px Arial'
+      
+      let xPos = 25
+      headers.forEach((header, index) => {
+        ctx.fillText(header, xPos, yPos + 20)
+        xPos += columnWidths[index]
+      })
+      
+      yPos += rowHeight
+      
+      // Table rows
+      ctx.font = '11px Arial'
+      wishlists.slice(0, 20).forEach((wishlist, index) => { // Limit to 20 rows for PNG
+        if (index % 2 === 0) {
+          ctx.fillStyle = '#fafafa'
+          ctx.fillRect(20, yPos, canvas.width - 40, rowHeight)
+        }
+        
+        ctx.fillStyle = '#333333'
+        xPos = 25
+        
+        const recentItem = wishlist.wishlist_items[0]
+        const rowData = [
+          wishlist.user.username,
+          `${wishlist.total_items} items`,
+          recentItem ? (recentItem.property.name.length > 50 ? recentItem.property.name.substring(0, 50) + '...' : recentItem.property.name) : 'No items',
+          recentItem ? formatDate(recentItem.added_at) : 'N/A'
+        ]
+        
+        rowData.forEach((data, dataIndex) => {
+          ctx.fillText(data, xPos, yPos + 20)
+          xPos += columnWidths[dataIndex]
+        })
+        
+        yPos += rowHeight
+      })
+      
+      // Footer
+      ctx.fillStyle = '#666666'
+      ctx.font = '10px Arial'
+      ctx.fillText(`Real Estate Platform - ${new Date().getFullYear()} | Page 1 of 1`, 20, 780)
+      
+      // Convert to PNG and download
+      const link = document.createElement('a')
+      link.download = `wishlists-snapshot-${new Date().toISOString().split('T')[0]}.png`
+      link.href = canvas.toDataURL('image/png', 1.0)
+      link.click()
+      
+      toast({
+        title: "PNG Export Complete",
+        description: "Wishlists snapshot has been saved as PNG",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error exporting to PNG:', error)
+      toast({
+        title: "Export Failed",
+        description: "Could not generate PNG export",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
 
   // Add debugging for images
   useEffect(() => {
@@ -186,6 +509,49 @@ export function WishlistsTab() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* Export Button */}
+          <div className="relative group">
+            <Button 
+              
+              size="sm"
+              disabled={loading.export || wishlists.length === 0}
+              className="rounded-lg border-2 hover:border-primary/50 transition-all duration-300"
+            >
+              <Download className={`h-4 w-4 mr-2 ${loading.export ? 'animate-spin' : ''}`} />
+              Export Data
+            </Button>
+            
+            {/* Export Options Dropdown */}
+            <div className="absolute right-0 top-full mt-1 w-48 bg-background border-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+              <div className="p-2 space-y-1">
+                <button
+                  onClick={exportToPDF}
+                  disabled={loading.export || wishlists.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <FileText className="h-4 w-4 text-red-500" />
+                  {loading.export ? 'Generating...' : 'Export as PDF'}
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  disabled={loading.export || wishlists.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <TableIcon className="h-4 w-4 text-green-500" />
+                  {loading.export ? 'Generating...' : 'Export as Excel'}
+                </button>
+                <button
+                  onClick={exportToPNG}
+                  disabled={loading.export || wishlists.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <Image className="h-4 w-4 text-blue-500" />
+                  {loading.export ? 'Generating...' : 'Export as PNG'}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Search */}
           <div className="relative flex-1 sm:flex-initial">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />

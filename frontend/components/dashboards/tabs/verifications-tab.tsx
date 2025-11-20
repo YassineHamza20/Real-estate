@@ -11,7 +11,10 @@ import { useAuth } from "@/contexts/auth-context"
 import { adminVerificationsApi, SellerVerification, VerificationStats } from "@/lib/api/adminVerifications"
 import { 
   Search, MoreVertical, CheckCircle, XCircle, Loader2, Eye, 
-  User, FileText, Calendar, RefreshCw, Download, UserCheck, UserX
+  User, FileText, Calendar, RefreshCw, Download, UserCheck, UserX,
+  FileText as FileTextIcon,
+  Table as TableIcon,
+  Image
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { VerificationDetailModal } from "../modals/verification-detail-modal"
@@ -21,7 +24,8 @@ export function VerificationsTab() {
   const [verifications, setVerifications] = useState<SellerVerification[]>([])
   const [loading, setLoading] = useState({
     verifications: false,
-    stats: false
+    stats: false,
+    export: false
   })
   const [statusFilter, setStatusFilter] = useState("all")
   const [stats, setStats] = useState<VerificationStats | null>(null)
@@ -32,6 +36,321 @@ export function VerificationsTab() {
 
   // Selected verifications for bulk actions
   const [selectedVerifications, setSelectedVerifications] = useState<number[]>([])
+
+  // Export functionality
+  const exportToPDF = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      const { jsPDF } = await import('jspdf')
+      
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      // Set document properties
+      doc.setProperties({
+        title: `Verifications Report - ${new Date().toLocaleDateString()}`,
+        subject: 'Seller Verifications Export',
+        author: user?.username || 'Admin User',
+        creator: 'Real Estate Platform',
+        keywords: 'verifications, sellers, export'
+      })
+
+      // Add header
+      doc.setFillColor(59, 130, 246)
+      doc.rect(0, 0, 297, 20, 'F')
+      
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(16)
+      doc.setFont(undefined, 'bold')
+      doc.text('REAL ESTATE PLATFORM - VERIFICATIONS REPORT', 20, 12)
+
+      // Generation info
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      doc.text(`Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 20, 18)
+      doc.text(`By: ${user?.username || 'Admin User'}`, 200, 18)
+
+      let yPosition = 30
+
+      // Summary section
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(12)
+      doc.setFont(undefined, 'bold')
+      doc.text('SUMMARY', 20, yPosition)
+      
+      yPosition += 8
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      const summaryText = `Total Verifications: ${verifications.length} | Pending: ${verifications.filter(v => v.status === 'pending').length} | Approved: ${verifications.filter(v => v.status === 'approved').length} | Rejected: ${verifications.filter(v => v.status === 'rejected').length}`
+      doc.text(summaryText, 20, yPosition)
+
+      yPosition += 15
+
+      // Table headers
+      const headers = ['ID', 'Username', 'Email', 'Status', 'Submitted', 'Reviewed', 'Admin Notes']
+      const columnWidths = [15, 40, 50, 30, 30, 30, 72]
+      
+      let xPosition = 20
+      doc.setFillColor(240, 240, 240)
+      doc.rect(xPosition, yPosition, 257, 8, 'F')
+      
+      doc.setTextColor(0, 0, 0)
+      doc.setFontSize(8)
+      doc.setFont(undefined, 'bold')
+      
+      headers.forEach((header, index) => {
+        doc.text(header, xPosition + 2, yPosition + 6)
+        xPosition += columnWidths[index]
+      })
+
+      yPosition += 8
+
+      // Table rows
+      doc.setFont(undefined, 'normal')
+      verifications.forEach((verification, index) => {
+        if (yPosition > 180) {
+          doc.addPage()
+          yPosition = 30
+          
+          // Add headers to new page
+          xPosition = 20
+          doc.setFillColor(240, 240, 240)
+          doc.rect(xPosition, yPosition, 257, 8, 'F')
+          doc.setTextColor(0, 0, 0)
+          doc.setFontSize(8)
+          doc.setFont(undefined, 'bold')
+          
+          headers.forEach((header, index) => {
+            doc.text(header, xPosition + 2, yPosition + 6)
+            xPosition += columnWidths[index]
+          })
+          yPosition += 8
+        }
+
+        xPosition = 20
+        const rowData = [
+          verification.id.toString(),
+          verification.user?.username || 'Unknown',
+          verification.user?.email || 'No email',
+          verification.status.charAt(0).toUpperCase() + verification.status.slice(1),
+          formatDate(verification.submitted_at),
+          verification.reviewed_at ? formatDate(verification.reviewed_at) : 'Not reviewed',
+          verification.admin_notes || 'No notes'
+        ]
+
+        doc.setFontSize(7)
+        rowData.forEach((data, dataIndex) => {
+          const lines = doc.splitTextToSize(data, columnWidths[dataIndex] - 2)
+          lines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, xPosition + 1, yPosition + 4 + (lineIndex * 3))
+          })
+          xPosition += columnWidths[dataIndex]
+        })
+
+        yPosition += 15
+      })
+
+      // Footer
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setTextColor(150, 150, 150)
+        doc.setFontSize(8)
+        doc.text(`Page ${i} of ${pageCount}`, 150, 200, { align: 'center' })
+        doc.text(`Real Estate Platform - ${new Date().getFullYear()}`, 20, 290)
+      }
+
+      doc.save(`verifications-report-${new Date().toISOString().split('T')[0]}.pdf`)
+      
+      toast({
+        title: "PDF Export Complete",
+        description: "Verifications data has been exported to PDF",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error exporting to PDF:', error)
+      toast({
+        title: "Export Failed",
+        description: "Could not generate PDF export",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
+
+  const exportToExcel = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      const csvContent = [
+        // Header
+        ['Verifications Export', '', '', '', '', '', ''],
+        [`Generated,${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`],
+        [`By,${user?.username || 'Admin'}`],
+        [''],
+        
+        // Data headers
+        ['ID', 'Username', 'Email', 'User Role', 'Status', 'Submitted At', 'Reviewed At', 'Admin Notes', 'Document Type', 'Document URL'],
+        
+        // Data rows
+        ...verifications.map(verification => [
+          verification.id,
+          `"${verification.user?.username || 'Unknown'}"`,
+          `"${verification.user?.email || 'No email'}"`,
+          verification.user?.role || 'Unknown',
+          verification.status,
+          verification.submitted_at,
+          verification.reviewed_at || '',
+          `"${(verification.admin_notes || '').replace(/"/g, '""')}"`,
+          verification.document?.document_type || '',
+          verification.document?.document_url || ''
+        ]),
+        [''],
+        ['Summary', '', '', '', '', '', '', '', '', ''],
+        [`Total Verifications,${verifications.length}`],
+        [`Pending,${verifications.filter(v => v.status === 'pending').length}`],
+        [`Approved,${verifications.filter(v => v.status === 'approved').length}`],
+        [`Rejected,${verifications.filter(v => v.status === 'rejected').length}`]
+      ].map(row => row.join(',')).join('\n')
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      
+      link.setAttribute('href', url)
+      link.setAttribute('download', `verifications-${new Date().toISOString().split('T')[0]}.csv`)
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast({
+        title: "Excel Export Complete",
+        description: "Verifications data exported successfully",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error exporting to Excel:', error)
+      toast({
+        title: "Export Failed",
+        description: "Could not generate Excel export",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
+
+  const exportToPNG = async () => {
+    setLoading(prev => ({ ...prev, export: true }))
+    try {
+      // Create a canvas element
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')!
+      
+      // Set canvas size
+      canvas.width = 1200
+      canvas.height = 800
+      
+      // Background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
+      // Header
+      ctx.fillStyle = '#1e40af'
+      ctx.fillRect(0, 0, canvas.width, 60)
+      
+      // Title
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 24px Arial'
+      ctx.fillText('Real Estate Platform - Verifications Report', 20, 35)
+      
+      // Generation info
+      ctx.fillStyle = '#666666'
+      ctx.font = '14px Arial'
+      ctx.fillText(`Generated on ${new Date().toLocaleDateString()} by ${user?.username || 'Admin'}`, 20, 85)
+      
+      // Summary
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 16px Arial'
+      ctx.fillText(`Total Verifications: ${verifications.length} | Pending: ${verifications.filter(v => v.status === 'pending').length} | Approved: ${verifications.filter(v => v.status === 'approved').length} | Rejected: ${verifications.filter(v => v.status === 'rejected').length}`, 20, 115)
+      
+      let yPos = 150
+      const rowHeight = 30
+      const headers = ['ID', 'Username', 'Status', 'Submitted', 'Reviewed']
+      const columnWidths = [50, 200, 150, 150, 150]
+      
+      // Table headers
+      ctx.fillStyle = '#f3f4f6'
+      ctx.fillRect(20, yPos, canvas.width - 40, rowHeight)
+      ctx.fillStyle = '#333333'
+      ctx.font = 'bold 12px Arial'
+      
+      let xPos = 25
+      headers.forEach((header, index) => {
+        ctx.fillText(header, xPos, yPos + 20)
+        xPos += columnWidths[index]
+      })
+      
+      yPos += rowHeight
+      
+      // Table rows
+      ctx.font = '11px Arial'
+      verifications.slice(0, 20).forEach((verification, index) => { // Limit to 20 rows for PNG
+        if (index % 2 === 0) {
+          ctx.fillStyle = '#fafafa'
+          ctx.fillRect(20, yPos, canvas.width - 40, rowHeight)
+        }
+        
+        ctx.fillStyle = '#333333'
+        xPos = 25
+        
+        const rowData = [
+          verification.id.toString(),
+          verification.user?.username || 'Unknown',
+          verification.status.charAt(0).toUpperCase() + verification.status.slice(1),
+          formatDate(verification.submitted_at),
+          verification.reviewed_at ? formatDate(verification.reviewed_at) : 'Not reviewed'
+        ]
+        
+        rowData.forEach((data, dataIndex) => {
+          ctx.fillText(data, xPos, yPos + 20)
+          xPos += columnWidths[dataIndex]
+        })
+        
+        yPos += rowHeight
+      })
+      
+      // Footer
+      ctx.fillStyle = '#666666'
+      ctx.font = '10px Arial'
+      ctx.fillText(`Real Estate Platform - ${new Date().getFullYear()} | Page 1 of 1`, 20, 780)
+      
+      // Convert to PNG and download
+      const link = document.createElement('a')
+      link.download = `verifications-snapshot-${new Date().toISOString().split('T')[0]}.png`
+      link.href = canvas.toDataURL('image/png', 1.0)
+      link.click()
+      
+      toast({
+        title: "PNG Export Complete",
+        description: "Verifications snapshot has been saved as PNG",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error exporting to PNG:', error)
+      toast({
+        title: "Export Failed",
+        description: "Could not generate PNG export",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }))
+    }
+  }
 
   // Add debug logging for selected verification
   useEffect(() => {
@@ -257,6 +576,49 @@ export function VerificationsTab() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* Export Button */}
+          <div className="relative group">
+            <Button 
+              
+              size="sm"
+              disabled={loading.export || verifications.length === 0}
+              className="rounded-lg border-2 hover:border-primary/50 transition-all duration-300"
+            >
+              <Download className={`h-4 w-4 mr-2 ${loading.export ? 'animate-spin' : ''}`} />
+              Export Data
+            </Button>
+            
+            {/* Export Options Dropdown */}
+            <div className="absolute right-0 top-full mt-1 w-48 bg-background border-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+              <div className="p-2 space-y-1">
+                <button
+                  onClick={exportToPDF}
+                  disabled={loading.export || verifications.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <FileTextIcon className="h-4 w-4 text-red-500" />
+                  {loading.export ? 'Generating...' : 'Export as PDF'}
+                </button>
+                <button
+                  onClick={exportToExcel}
+                  disabled={loading.export || verifications.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <TableIcon className="h-4 w-4 text-green-500" />
+                  {loading.export ? 'Generating...' : 'Export as Excel'}
+                </button>
+                <button
+                  onClick={exportToPNG}
+                  disabled={loading.export || verifications.length === 0}
+                  className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-sm font-medium"
+                >
+                  <Image className="h-4 w-4 text-blue-500" />
+                  {loading.export ? 'Generating...' : 'Export as PNG'}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Status Filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-40">

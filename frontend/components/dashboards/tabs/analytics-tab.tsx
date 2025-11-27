@@ -40,12 +40,8 @@ export function AnalyticsTab() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
   const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
 
-  // Safe data access helpers
+  // Safe data access helpers - ONLY use properties that exist in your API
   const getOverviewData = () => ({
-    totalProperties: overviewData?.totalProperties ?? 0,
-    activeProperties: overviewData?.activeProperties ?? 0,
-    totalUsers: overviewData?.totalUsers ?? 0,
-    totalWishlists: overviewData?.totalWishlists ?? 0,
     period: overviewData?.period || 'Last 30d',
     userDemographics: {
       buyers: overviewData?.userDemographics?.buyers ?? 0,
@@ -53,7 +49,12 @@ export function AnalyticsTab() {
       verifiedSellers: overviewData?.userDemographics?.verifiedSellers ?? 0,
       topLocations: overviewData?.userDemographics?.topLocations || []
     },
-    topProperties: overviewData?.topProperties || []
+    topProperties: overviewData?.topProperties || [],
+    // Calculate totals from existing data
+    totalProperties: overviewData?.propertyMetrics?.total ?? 0,
+    activeProperties: overviewData?.propertyMetrics?.active ?? 0,
+    totalUsers: (overviewData?.userDemographics?.buyers ?? 0) + (overviewData?.userDemographics?.sellers ?? 0),
+    totalWishlists: overviewData?.engagement?.wishlistAdds ?? 0
   })
 
   const getPropertyData = () => ({
@@ -65,7 +66,7 @@ export function AnalyticsTab() {
     },
     priceStats: {
       total_value: propertyData?.priceStats?.total_value ?? 0,
-      average_price: propertyData?.priceStats?.average_price ?? 0,
+      average_price: propertyData?.priceStats?.avg_price ?? 0,
       min_price: propertyData?.priceStats?.min_price ?? 0,
       max_price: propertyData?.priceStats?.max_price ?? 0
     },
@@ -91,7 +92,7 @@ export function AnalyticsTab() {
     highEngagementProperties: performanceData?.highEngagementProperties || []
   })
 
-  // Export functionality
+  // Export functionality - FIXED to use only existing properties
   const exportToPDF = async () => {
     setExportLoading('pdf')
     try {
@@ -129,7 +130,7 @@ export function AnalyticsTab() {
 
       let yPosition = 35
 
-      // Summary section
+      // Summary section - FIXED to use calculated properties
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(12)
       doc.setFont(undefined, 'bold')
@@ -416,7 +417,7 @@ export function AnalyticsTab() {
       
       let yPos = 160
 
-      // Summary section
+      // Summary section - FIXED to use calculated properties
       ctx.fillStyle = '#333333'
       ctx.font = 'bold 24px Arial'
       ctx.fillText('Analytics Summary', 40, yPos)
@@ -530,7 +531,7 @@ export function AnalyticsTab() {
     }
   }
 
-  // Fetch data function
+  // Fetch data function - keep this the same
   const fetchAllData = async () => {
     setLoading(true)
     
@@ -587,6 +588,7 @@ export function AnalyticsTab() {
     fetchAllData()
   }, [timeRange])
 
+  // Keep all your helper functions the same...
   const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
     switch (trend) {
       case 'up': return <ArrowUp className="h-4 w-4" />
@@ -595,7 +597,6 @@ export function AnalyticsTab() {
     }
   }
 
-  // Helper functions for age distribution
   const formatAgeCategory = (key: string): string => {
     if (!key) return 'Unknown';
     return key.replace(/_/g, ' ')
@@ -635,7 +636,7 @@ export function AnalyticsTab() {
     return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
   }
 
-  // Overview Tab Content
+  // Keep all your tab components the same...
   const OverviewTab = () => {
     const overview = getOverviewData()
     return (
@@ -821,6 +822,7 @@ export function AnalyticsTab() {
     )
   }
 
+  // Keep PropertyOverview and PropertyPerformance components exactly as they are...
   const PropertyOverview = () => {
     const property = getPropertyData()
     return (
@@ -1826,15 +1828,15 @@ export function AnalyticsTab() {
           <Building className="h-4 w-4 mr-2" />
           Properties
         </Button>
-        <Button
-          variant={activeTab === 'performance' ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setActiveTab('performance')}
-          className="flex-1"
-        >
-          <Target className="h-4 w-4 mr-2" />
-          Performance
-        </Button>
+         <Button
+  variant={activeTab === 'performance' ? "default" : "ghost"}
+  size="sm"
+  onClick={() => setActiveTab('performance')}
+  className="flex-1"
+>
+  <Target className="h-4 w-4 mr-2" />
+  Performance
+</Button>
       </div>
 
       {/* Tab Content */}

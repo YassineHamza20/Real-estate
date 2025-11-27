@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "properties": "Properties",
+    "about": "About",
+    "contact": "Contact",
+    "dashboard": "Dashboard",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "getStarted": "Get Started"
+  },
+  "language": {
+    "english": "English",
+    "german": "German"
+  }
+}

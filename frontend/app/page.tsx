@@ -118,7 +118,7 @@ export default function HomePage() {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="text-xl sm:text-2xl mb-4 text-balance max-w-3xl mx-auto font-light leading-relaxed"
           >
-            Find your dream home or sell your property with confidence
+           Whether you’re looking for a home or offering one, WohnTraume helps you buy, rent, or sell with confidence
           </motion.p>
 
           <motion.p
@@ -127,7 +127,7 @@ export default function HomePage() {
             transition={{ duration: 0.8, delay: 0.6 }}
             className="text-lg mb-10 text-white/90 max-w-2xl mx-auto leading-relaxed"
           >
-            Professional real estate platform trusted by thousands of buyers and sellers
+            trusted by thousands 
           </motion.p>
 
           <motion.div
@@ -238,9 +238,9 @@ function FeatureSection() {
   const isInView = useInView(ref, { once: true })
 
   const features = [
-    { icon: Search, title: "Advanced Search", desc: "AI-powered filters and instant recommendations" },
+    { icon: Search, title: "Advanced Search", desc: "AI-powered filters & Search" },
     { icon: Shield, title: "Verified Listings", desc: "Every property is inspected and authenticated" },
-    { icon: TrendingUp, title: "Market Insights", desc: "Real-time data, trends, and investment analytics" },
+    { icon: TrendingUp, title: "Recommendation System ", desc: "Real-time data recommendations" },
   ]
 
   return (

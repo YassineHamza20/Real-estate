@@ -328,7 +328,7 @@ export default function RegisterPage() {
               Start your <span className="text-primary">real estate journey</span> today
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              Join thousands of buyers who trust WohnTraume.
+              Join thousands who trust WohnTraume.
             </p>
           </div>
 
@@ -400,7 +400,7 @@ export default function RegisterPage() {
                 <CardDescription className="text-lg">
                   {success 
                     ? "Almost there! Confirm your email to get started" 
-                    : "Join as a buyer to start exploring properties"}
+                    : "Join to start exploring properties"}
                 </CardDescription>
               </div>
             </CardHeader>
@@ -506,7 +506,7 @@ export default function RegisterPage() {
                           <Input
                             id="firstName"
                             type="text"
-                            placeholder="John"
+                            placeholder="Jack"
                             value={formData.firstName}
                             onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                             required
@@ -522,7 +522,7 @@ export default function RegisterPage() {
                           <Input
                             id="lastName"
                             type="text"
-                            placeholder="Doe"
+                            placeholder="David"
                             value={formData.lastName}
                             onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                             required
@@ -541,7 +541,7 @@ export default function RegisterPage() {
                         <Input
                           id="username"
                           type="text"
-                          placeholder="johndoe"
+                          placeholder="Jack David"
                           value={formData.username}
                           onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                           required
@@ -558,7 +558,7 @@ export default function RegisterPage() {
                         <Input
                           id="email"
                           type="email"
-                          placeholder="john@example.com"
+                          placeholder="Jack@example.com"
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           required

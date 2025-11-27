@@ -83,7 +83,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         message = f"""
        Hello {user.username},
 
-Welcome to Real Estate Team!
+Welcome to WohnTraum Team!
 
 Thank you for registering with us. To complete your registration and activate your account, please confirm your email address by clicking the link below:
 
@@ -96,7 +96,7 @@ If you're having trouble clicking the link, you can copy and paste the entire UR
 If you didn't create an account with us, please disregard this email - no action is needed.
 
 Best regards,
-Your Real Estate Team
+Your WohnTraum Team
         """
         
         send_mail(
@@ -199,7 +199,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         message = f"""
        Hello {user.username},
 
-We received a request to reset your password for your Real Estate Team account. To create a new password, please click the link below:
+We received a request to reset your password for your WohnTraum account. To create a new password, please click the link below:
 
 {reset_url}
 
@@ -210,7 +210,7 @@ If you're having trouble clicking the link, you can copy and paste the entire UR
 If you didn't request a password reset, please disregard this email - your account remains secure and no action is needed.
 
 Best regards,
-Your Real Estate Team
+Your WohnTraum Team
         """
         
         send_mail(

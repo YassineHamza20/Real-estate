@@ -388,7 +388,7 @@ export function Chatbot() {
                 </div>
                 <div>
                   <CardTitle className="text-lg font-semibold text-foreground">
-                    RealEstate AI
+                  WohnTraum  AI
                   </CardTitle>
                  <p className="text-xs text-muted-foreground flex items-center gap-1">
   <span className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></span>

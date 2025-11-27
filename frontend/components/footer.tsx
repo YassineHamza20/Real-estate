@@ -122,7 +122,7 @@ export function Footer() {
                   href="mailto:support@WohnTraume.com"
                   className="text-sm text-gray-400 hover:text-primary transition-colors"
                 >
-                  support@WohnTraume.com
+                  yassinehamza.pro@gmail.com
                 </a>
               </li>
             </ul>

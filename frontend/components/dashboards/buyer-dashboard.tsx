@@ -459,8 +459,7 @@ export function BuyerDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
           {[
             { title: "Saved", value: savedProperties.length, sub: "Wishlist", icon: Heart },
-            { title: "Viewed", value: 24, sub: "Recently", icon: Eye },
-            { title: "Messages", value: 8, sub: "Active", icon: Mail },
+            
           ].map((stat, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
               <Card className="border hover:border-primary/50 transition-all hover:shadow-md">

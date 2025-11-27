@@ -14,7 +14,7 @@ def send_verification_email(verification, status):
         
         Great news! Your seller verification has been APPROVED! 🎉
         
-        You are now a verified seller on RealEstate Pro. You can:
+        You are now a verified seller on WohnTraum . You can:
         - List properties for sale
         - Manage your property portfolio
         - Connect with potential buyers
@@ -22,7 +22,7 @@ def send_verification_email(verification, status):
         Log in to start listing your properties: http://localhost:3000
         
         Best regards,
-        The RealEstate Pro Team
+        Your WohnTraum Team
         """
     elif status == 'rejected':
         subject = "Update on Your Seller Verification Request"
@@ -39,7 +39,7 @@ def send_verification_email(verification, status):
         If you have questions, please contact our support team.
         
         Best regards,
-        The RealEstate Pro Team
+        Your WohnTraum Team
         """
     
     try:

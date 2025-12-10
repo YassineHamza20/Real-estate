@@ -54,29 +54,29 @@ export default function ContactPage() {
     {
       icon: Phone,
       title: "Phone",
-      details: "+1 (555) 123-4567",
-      subdetails: "Mon–Fri 9am–6pm EST",
+      details: "+49 (155)10916 918",
+      subdetails: "Mon–Fri 9 AM–6 PM ",
       gradient: "from-emerald-500 to-teal-600",
     },
     {
       icon: Mail,
       title: "Email",
-      details: "support@realestate.com",
+      details: "yassinehamza.pro@gmail.com",
       subdetails: "Replies within 24 hours",
       gradient: "from-blue-500 to-indigo-600",
     },
     {
       icon: MapPin,
       title: "Office",
-      details: "123 Real Estate Ave",
-      subdetails: "New York, NY 10001",
+      details: "Vogelsanger Weg 157",
+      subdetails: "40470 Düsseldorf, Germany",
       gradient: "from-purple-500 to-pink-600",
     },
     {
       icon: Clock,
       title: "Business Hours",
       details: "Monday – Friday",
-      subdetails: "9:00 AM – 6:00 PM EST",
+      subdetails: "9:00 AM – 6:00 PM",
       gradient: "from-orange-500 to-amber-600",
     },
   ]
@@ -84,7 +84,7 @@ export default function ContactPage() {
   const faqItems = [
     {
       question: "How do I become a verified seller?",
-      answer: "Register as a buyer first, then navigate to your profile and click 'Become a Seller'. You'll need to submit verification documents including ID and proof of ownership."
+      answer: "Register as a normal account (buyer/renter) first, then navigate to your profile and click 'Become a Seller'. You'll need to submit verification documents including ID and proof of ownership."
     },
     {
       question: "How long does verification take?",
@@ -102,10 +102,6 @@ export default function ContactPage() {
     {
       question: "What documents do I need to buy a property?",
       answer: "Typically you'll need proof of funds or mortgage pre-approval, government-issued ID, and sometimes references. Our agents will guide you through the specific requirements for each property."
-    },
-    {
-      question: "Do you offer mortgage assistance?",
-      answer: "Yes, we partner with several financial institutions to help you find the best mortgage rates. Contact our mortgage specialists for personalized assistance."
     },
     {
       question: "Can I list my property for both sale and rent?",
@@ -191,6 +187,8 @@ export default function ContactPage() {
             transition={{ duration: 0.6 }}
             className="max-w-4xl mx-auto"
           >
+{/*             
+            
             <Card className="border-2 border-primary/10 shadow-2xl bg-card/95 backdrop-blur-xl overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-primary via-primary/70 to-accent" />
               <CardHeader className="text-center pt-10 pb-8 bg-gradient-to-b from-muted/30 to-transparent -m-px">
@@ -341,6 +339,55 @@ export default function ContactPage() {
                 </form>
               </CardContent>
             </Card>
+             */}
+
+             <Card className="border-2 border-primary/10 shadow-2xl bg-card/95 backdrop-blur-xl overflow-hidden">
+  <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-primary via-primary/70 to-accent" />
+
+  <CardHeader className="text-center pt-10 pb-8 bg-gradient-to-b from-muted/30 to-transparent -m-px">
+    <CardTitle className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+      Contact Us
+    </CardTitle>
+    <CardDescription className="text-lg mt-3 max-w-2xl mx-auto">
+      We would love to hear from you!  
+      For any inquiries, feel free to reach out directly via phone or email.
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent className="pt-6 pb-10">
+    <div className="space-y-8 text-center">
+
+      <div className="space-y-3">
+        <h3 className="text-2xl font-semibold text-primary">Phone</h3>
+        <p className="text-lg">
+          <a
+            href="tel:+4915510916918"
+            className="text-accent font-medium hover:underline"
+          >
+            +49 155 10916918
+          </a>
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-2xl font-semibold text-primary">Email</h3>
+        <p className="text-lg">
+          <a
+            href="mailto:yassinehamza.pro@gmail.com"
+            className="text-accent font-medium hover:underline"
+          >
+            yassinehamza.pro@gmail.com
+          </a>
+        </p>
+      </div>
+
+      <p className="text-lg max-w-xl mx-auto text-muted-foreground">
+        Send us an inquiry through phone or email and our team will get back to you as soon as possible.
+      </p>
+    </div>
+  </CardContent>
+</Card>
+
           </motion.div>
         </div>
       </section>

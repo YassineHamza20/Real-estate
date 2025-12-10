@@ -4,16 +4,23 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables from .env file for security
 load_dotenv()
 
+# Base project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+# Secret key for Django security (loaded from env file)
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-for-dev')
+# Debug mode based on environment variable
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
+# Allowed hosts for deployment / security
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key-here')
 
+# API key for Gemini-based chatbot feature
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key-here')
+# ------------------- EMAIL SETTINGS -------------------
+
+# Use Gmail’s SMTP server to send emails (verification, notifications, etc.)
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
@@ -21,8 +28,11 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+# Default sender email address
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+# Frontend URL used inside backend-generated links
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+# ------------------- DJANGO APPS -------------------
 
 # Application definition
 INSTALLED_APPS = [
@@ -33,6 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
+    
+    # Third-party extensions
     'django_extensions',
     'django_filters',
     'rest_framework',
@@ -44,7 +56,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
-    
+     # Project apps
     'dashboard',
     'users',
     'properties',
@@ -67,6 +79,8 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
 ]
 
+# ------------------- URLS, TEMPLATES, WSGI -------------------
+
 ROOT_URLCONF = 'real_estate.urls'
 
 TEMPLATES = [
@@ -85,6 +99,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'real_estate.wsgi.application'
+# ------------------- DATABASE -------------------
 
 DATABASES = {
     'default': {
@@ -92,6 +107,7 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+# ------------------- PASSWORD VALIDATION -------------------
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -107,6 +123,7 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+# ------------------- STATIC & MEDIA FILES -------------------
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -115,13 +132,15 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# File upload limits
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Authentication backends
+# Authentication backends + Allauth
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -133,8 +152,9 @@ ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_AUTHENTICATION_METHOD = 'email'
 ACCOUNT_EMAIL_VERIFICATION = 'none'
 ACCOUNT_UNIQUE_EMAIL = True
+# Google Social Login Configuration
 
-# Social Account Configuration
+
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'SCOPE': [
@@ -167,7 +187,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
 }
-
+# ------------------- JWT CONFIGURATION 
 # JWT Settings
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
@@ -177,6 +197,7 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
+# Allows requests from React frontend
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",

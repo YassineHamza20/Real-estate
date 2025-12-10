@@ -199,7 +199,7 @@ export default function AboutPage() {
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
               For over <strong className="text-primary">15 years</strong>, we've turned dreams into addresses. <br className="hidden md:block" />
-              Excellence isn’t our goal — it’s our <span className="text-accent font-bold">DNA</span>.
+              Excellence isn’t our goal it’s our <span className="text-accent font-bold">DNA</span>.
             </p>
           </div>
         </motion.div>
@@ -269,7 +269,7 @@ export default function AboutPage() {
               </h2>
               <p className="text-xl md:text-2xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
                 To <strong className="text-primary">redefine real estate</strong> with innovation, integrity, and{" "}
-                <span className="text-accent">unmatched human touch</span> — one home at a time.
+                <span className="text-accent">unmatched human touch</span>  one home at a time.
               </p>
             </div>
 
@@ -372,10 +372,10 @@ export default function AboutPage() {
               <span className="text-xl font-medium">Join 5,000+ Happy Homeowners</span>
             </motion.div>
             <h2 className="text-4xl md:text-6xl font-bold mb-6 text-white">
-              Ready to Write <span className="text-accent">Your</span> Chapter?
+              Ready to Write Your Chapter?
             </h2>
             <p className="text-xl md:text-2xl mb-14 text-white/90 max-w-2xl mx-auto leading-relaxed">
-              Your dream home isn’t just a listing — it’s a story waiting to begin.
+              Your dream home isn’t just a listing  it’s a story waiting to begin.
             </p>
             <div className="flex gap-6 justify-center flex-wrap">
               <Button

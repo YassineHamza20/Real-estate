@@ -367,7 +367,7 @@ class DashboardCharts {
     }
 
     drillDownChart(chartId) {
-        console.log(`Drill-down for ${chartId}`);
+       // console.log(`Drill-down for ${chartId}`);
         // Implement your drill-down logic here
         alert(`Drill-down feature for ${chartId} - This would show detailed data`);
     }

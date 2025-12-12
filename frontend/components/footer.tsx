@@ -1,46 +1,57 @@
 import Link from "next/link"
-import { Building2, Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from "lucide-react"
+import { Building2, Facebook, Twitter, Instagram, Linkedin,X, Mail, Phone, MapPin } from "lucide-react"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
 
   return (
-   <footer className="bg-background text-foreground border-t border-primary/20">
+    <footer className="bg-background text-foreground border-t border-primary/20">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           {/* Brand Section */}
-          <div className="space-y-4">
+          <div className="space-y-4 lg:col-span-2">
             <Link href="/" className="flex items-center gap-2 group">
               <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
                 <Building2 className="h-6 w-6 text-black" />
               </div>
-              <span className="text-xl font-bold text-primary">WohnTraume</span>
+              <span className="text-xl font-bold text-primary">WohnTräume</span>
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed">
               Your trusted partner in finding the perfect property. We make real estate simple, transparent, and
               accessible for everyone.
             </p>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              Part of <span className="text-primary font-medium">Peker Holding</span> a major real estate player investing hundreds of millions in sustainable, high-tech buildings. To showcase modern design and innovation, combining offices, labs, and lifestyle spaces with green technology.
+            </p>
             <div className="flex gap-3">
               <a
-                href="#"
+                href="https://www.facebook.com/pekerholding/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg bg-primary/10 hover:bg-primary flex items-center justify-center transition-colors group"
               >
                 <Facebook className="h-4 w-4 text-primary group-hover:text-black" />
               </a>
               <a
-                href="#"
+                href="https://x.com/peker_holding"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg bg-primary/10 hover:bg-primary flex items-center justify-center transition-colors group"
               >
-                <Twitter className="h-4 w-4 text-primary group-hover:text-black" />
+                <X className="h-4 w-4 text-primary group-hover:text-black" />
               </a>
               <a
-                href="#"
+                href="https://www.instagram.com/peker_holding/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg bg-primary/10 hover:bg-primary flex items-center justify-center transition-colors group"
               >
                 <Instagram className="h-4 w-4 text-primary group-hover:text-black" />
               </a>
               <a
-                href="#"
+                href="https://www.linkedin.com/company/peker-holding/posts/?feedView=all"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-9 h-9 rounded-lg bg-primary/10 hover:bg-primary flex items-center justify-center transition-colors group"
               >
                 <Linkedin className="h-4 w-4 text-primary group-hover:text-black" />
@@ -75,33 +86,6 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Resources */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-primary">Resources</h3>
-            <ul className="space-y-2">
-              <li>
-                <Link href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                  Help Center
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                  Terms of Service
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
-                  FAQ
-                </Link>
-              </li>
-            </ul>
-          </div>
-
           {/* Contact Info */}
           <div>
             <h3 className="text-lg font-semibold mb-4 text-primary">Contact Us</h3>
@@ -119,10 +103,10 @@ export function Footer() {
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-primary flex-shrink-0" />
                 <a
-                  href="mailto:support@WohnTraume.com"
+                  href="mailto:yhamza@pekerholding.com"
                   className="text-sm text-gray-400 hover:text-primary transition-colors"
                 >
-                  yassinehamza.pro@gmail.com
+                  yhamza@pekerholding.com
                 </a>
               </li>
             </ul>
@@ -132,7 +116,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-primary/20">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-gray-400">© {currentYear} WohnTraume. All rights reserved.</p>
+            <p className="text-sm text-gray-400">© {currentYear} WohnTräume. All rights reserved.</p>
             <div className="flex gap-6">
               <Link href="#" className="text-sm text-gray-400 hover:text-primary transition-colors">
                 Privacy

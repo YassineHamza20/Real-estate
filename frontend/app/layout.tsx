@@ -15,7 +15,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "WohnTraume - Find Your Dream Home",
+  title: "WohnTräume - Find Your Dream Home",
   description: "Professional real estate platform for buying, selling, and managing properties",
 }
 

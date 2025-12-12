@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, get_user_model
 from django.utils import timezone
 from django.conf import settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 @csrf_exempt
 def get_csrf_token(request):
@@ -24,6 +25,7 @@ def debug_test(request):
         'timestamp': timezone.now().isoformat()
     })
 
+# TEST GOOGLE AUTH ENDPOINT exemple 
 @csrf_exempt
 def test_google_auth(request):
     """Test endpoint to verify backend is working"""
@@ -60,8 +62,7 @@ def test_google_auth(request):
  
 
 
-
-
+# MAIN GOOGLE AUTH ENDPOINT
 @csrf_exempt
 def google_auth(request):
     """
@@ -93,8 +94,8 @@ def google_auth(request):
                 }, status=400)
             
             # DEBUG: Print token details
-            print(f"Token length: {len(access_token) if access_token else 0}")
-            print(f"Token starts with: {access_token[:20] if access_token else 'None'}")
+           # print(f"Token length: {len(access_token) if access_token else 0}")
+           # print(f"Token starts with: {access_token[:20] if access_token else 'None'}")
             
             # Try to verify the token
             user_info = verify_google_token(access_token)
@@ -153,7 +154,7 @@ def google_auth(request):
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             
             # Generate JWT tokens
-            from rest_framework_simplejwt.tokens import RefreshToken
+            
             refresh = RefreshToken.for_user(user)
             
             response_data = {
@@ -194,7 +195,7 @@ def google_auth(request):
 
 
 
-
+# DEVELOPMENT: CREATE TEST USER WITHOUT GOOGLE
 def create_test_user(request, email, first_name, last_name):
     """Create a test user for development"""
     User = get_user_model()
@@ -216,7 +217,7 @@ def create_test_user(request, email, first_name, last_name):
     
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     
-    from rest_framework_simplejwt.tokens import RefreshToken
+     
     refresh = RefreshToken.for_user(user)
     
     return JsonResponse({
@@ -235,6 +236,9 @@ def create_test_user(request, email, first_name, last_name):
         'redirect_url': '/properties',
         'debug': 'Development mode - Google token verification bypassed'
     })
+
+
+
 def verify_google_token(token):
     """
     Verify Google token using UserInfo API (more reliable)

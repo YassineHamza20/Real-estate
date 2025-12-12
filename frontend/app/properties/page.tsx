@@ -79,7 +79,7 @@ export default function PropertiesPage() {
         apiFilters.price_max = filters.maxPrice
       }
 
-      console.log("🔍 Loading properties with filters:", apiFilters)
+      //console.log("🔍 Loading properties with filters:", apiFilters)
 
       const newProperties = await propertiesApi.getProperties(apiFilters)
       
@@ -97,7 +97,7 @@ export default function PropertiesPage() {
 
   // --- Initial Load & Filter/Search Change ---
   useEffect(() => {
-    console.log("🔄 Filters or search changed, reloading properties")
+    //console.log("🔄 Filters or search changed, reloading properties")
     setPage(1)
     loadProperties(1, false)
   }, [filters, searchQuery, loadProperties])

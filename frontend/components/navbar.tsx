@@ -143,12 +143,12 @@ export function Navbar() {
             <Link
               href="/"
               className="flex items-center gap-2.5 font-bold text-xl tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
-              aria-label="WohnTraume Home"
+              aria-label="WohnTräume Home"
             >
               <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
                 <Building2 className="h-5 w-5 text-primary" />
               </div>
-              <span className="text-foreground">WohnTraume</span>
+              <span className="text-foreground">WohnTräume</span>
             </Link>
 
             {/* Desktop Navigation */}

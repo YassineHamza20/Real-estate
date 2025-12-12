@@ -62,7 +62,7 @@ class DashboardCharts {
         const colors = this.getThemeColors();
         const data = window.dashboardData;
         
-        console.log('Initializing charts with data:', data);
+       // console.log('Initializing charts with data:', data);
 
         // 1. User Distribution Chart
         this.createChart('usersChart', {

@@ -95,7 +95,7 @@ export default function RegisterPage() {
       script.async = true
       script.defer = true
       script.onload = () => {
-        console.log('Google Identity Services loaded successfully')
+        //console.log('Google Identity Services loaded successfully')
         setGoogleScriptLoaded(true)
       }
       script.onerror = () => {
@@ -219,10 +219,10 @@ export default function RegisterPage() {
                 localStorage.setItem('refresh_token', data.tokens.refresh)
                 localStorage.setItem('auth_token', data.tokens.access) // For compatibility
                 
-                console.log('✅ Tokens stored:')
-                console.log('   - access_token:', data.tokens.access ? '✓' : '✗')
-                console.log('   - auth_token:', data.tokens.access ? '✓' : '✗')
-                console.log('   - refresh_token:', data.tokens.refresh ? '✓' : '✗')
+                // console.log('✅ Tokens stored:')
+                // console.log('   - access_token:', data.tokens.access ? '✓' : '✗')
+                // console.log('   - auth_token:', data.tokens.access ? '✓' : '✗')
+                // console.log('   - refresh_token:', data.tokens.refresh ? '✓' : '✗')
               }
               
               // Update auth context state
@@ -318,7 +318,7 @@ export default function RegisterPage() {
               <Building2 className="h-12 w-12 text-primary" />
             </motion.div>
             <div>
-              <h1 className="text-5xl font-bold">WohnTraume</h1>
+              <h1 className="text-5xl font-bold">WohnTräume</h1>
               <p className="text-muted-foreground text-sm mt-1">Premium Property Platform</p>
             </div>
           </div>
@@ -328,7 +328,7 @@ export default function RegisterPage() {
               Start your <span className="text-primary">real estate journey</span> today
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              Join thousands who trust WohnTraume.
+              Join thousands who trust WohnTräume.
             </p>
           </div>
 
@@ -391,7 +391,7 @@ export default function RegisterPage() {
                 >
                   <Building2 className="h-8 w-8 text-primary" />
                 </motion.div>
-                <CardTitle className="text-3xl font-bold">WohnTraume</CardTitle>
+                <CardTitle className="text-3xl font-bold">WohnTräume</CardTitle>
               </div>
               <div className="space-y-3">
                 <CardTitle className="text-4xl font-bold">

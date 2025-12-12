@@ -108,7 +108,7 @@ export default function HomePage() {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-5xl sm:text-6xl font-bold tracking-tight"
             >
-              WohnTraume
+              WohnTräume
             </motion.h1>
           </motion.div>
 
@@ -118,7 +118,7 @@ export default function HomePage() {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="text-xl sm:text-2xl mb-4 text-balance max-w-3xl mx-auto font-light leading-relaxed"
           >
-           Whether you’re looking for a home or offering one, WohnTraume helps you buy, rent, or sell with confidence
+           Whether you’re looking for a home or offering one, WohnTräume helps you buy, rent, or sell with confidence
           </motion.p>
 
           <motion.p
@@ -251,7 +251,7 @@ function FeatureSection() {
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-balance">Why Choose WohnTraume</h2>
+          <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-balance">Why Choose WohnTräume</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             Experience the future of real estate with our comprehensive platform
           </p>
@@ -435,7 +435,7 @@ function CTASection() {
           </motion.div>
           <h2 className="text-4xl sm:text-5xl font-bold mb-4 text-balance">Ready to Get Started?</h2>
           <p className="text-xl mb-10 leading-relaxed text-white/90">
-            Join thousands of buyers and sellers who trust WohnTraume for their property needs. Start your journey today.
+            Join thousands of buyers and sellers who trust WohnTräume for their property needs. Start your journey today.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>

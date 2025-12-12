@@ -108,7 +108,7 @@ useEffect(() => {
       script.async = true
       script.defer = true
       script.onload = () => {
-        console.log('Google Identity Services loaded successfully')
+       // console.log('Google Identity Services loaded successfully')
         setGoogleScriptLoaded(true)
       }
       script.onerror = () => {
@@ -222,10 +222,10 @@ const handleGoogleLogin = async () => {
               localStorage.setItem('refresh_token', data.tokens.refresh)
               localStorage.setItem('auth_token', data.tokens.access) // For compatibility
               
-              console.log('✅ Tokens stored:')
-              console.log('   - access_token:', data.tokens.access ? '✓' : '✗')
-              console.log('   - auth_token:', data.tokens.access ? '✓' : '✗')
-              console.log('   - refresh_token:', data.tokens.refresh ? '✓' : '✗')
+              // console.log('✅ Tokens stored:')
+              // console.log('   - access_token:', data.tokens.access ? '✓' : '✗')
+              // console.log('   - auth_token:', data.tokens.access ? '✓' : '✗')
+              // console.log('   - refresh_token:', data.tokens.refresh ? '✓' : '✗')
             }
             
             // Update auth context state
@@ -286,7 +286,7 @@ const handleGoogleLogin = async () => {
               <Building2 className="h-10 w-10 text-primary" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold">WohnTraume</h1>
+              <h1 className="text-4xl font-bold">WohnTräume</h1>
               <p className="text-muted-foreground text-sm">Premium Property Platform</p>
             </div>
           </div>
@@ -338,7 +338,7 @@ const handleGoogleLogin = async () => {
               <div className="p-2 rounded-xl bg-primary/10">
                 <Building2 className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle className="text-2xl font-bold">WohnTraume</CardTitle>
+              <CardTitle className="text-2xl font-bold">WohnTräume</CardTitle>
             </div>
             <div className="space-y-2">
               <CardTitle className="text-3xl font-bold">Welcome Back</CardTitle>
@@ -475,7 +475,7 @@ const handleGoogleLogin = async () => {
               </Button>
 
               <div className="text-center text-sm">
-                <span className="text-muted-foreground">New to WohnTraume? </span>
+                <span className="text-muted-foreground">New to WohnTräume? </span>
                 <Link href="/register" className="font-medium text-primary hover:underline">
                   Create an account
                 </Link>

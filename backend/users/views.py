@@ -3,8 +3,9 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import authenticate
-from rest_framework_simplejwt.tokens import RefreshToken
-
+from rest_framework_simplejwt.tokens import RefreshToken 
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from .models import User, SellerVerification
 from .serializers import (
     UserRegistrationSerializer, 
@@ -28,11 +29,10 @@ from django.db import models
 from django.utils import timezone
 from django.db.models import Count
 from .models import SellerVerification
-
- 
-
-
-
+from django.db.models import Count, Avg, Q, F
+from django.utils import timezone
+from datetime import timedelta
+from properties.models import Property, PropertyImage, Wishlist
 
 
 @api_view(['POST'])
@@ -373,10 +373,7 @@ def get_seller_contact_info(request, seller_id):
 
 # Add these to your existing users/views.py
 
-from .serializers import (
-    AdminUserSerializer, AdminUserCreateSerializer, AdminUserUpdateSerializer,
-    AdminSellerVerificationSerializer, AdminStatsSerializer
-)
+
 
 # Admin Permissions
 class IsAdminUser(permissions.BasePermission):
@@ -755,10 +752,7 @@ def admin_verifications_bulk_action(request):
 
 
 # users/views.py - Add these analytics views
-from django.db.models import Count, Avg, Q, F
-from django.utils import timezone
-from datetime import timedelta
-from properties.models import Property, PropertyImage, Wishlist
+
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated, IsAdminUser])
@@ -1009,10 +1003,6 @@ def admin_create_user(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
- 
-from django.contrib.auth import get_user_model
-from django.db import transaction
 
 User = get_user_model()
 

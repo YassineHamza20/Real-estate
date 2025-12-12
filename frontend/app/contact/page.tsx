@@ -61,7 +61,7 @@ export default function ContactPage() {
     {
       icon: Mail,
       title: "Email",
-      details: "yassinehamza.pro@gmail.com",
+      details: "yhamza@pekerholding.com",
       subdetails: "Replies within 24 hours",
       gradient: "from-blue-500 to-indigo-600",
     },
@@ -373,10 +373,10 @@ export default function ContactPage() {
         <h3 className="text-2xl font-semibold text-primary">Email</h3>
         <p className="text-lg">
           <a
-            href="mailto:yassinehamza.pro@gmail.com"
+            href="mailto:yhamza@pekerholding.com"
             className="text-accent font-medium hover:underline"
           >
-            yassinehamza.pro@gmail.com
+            yhamza@pekerholding.com
           </a>
         </p>
       </div>

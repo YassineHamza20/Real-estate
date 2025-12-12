@@ -81,7 +81,7 @@ async getProperties(filters?: any): Promise<Property[]> {
     // Remove page and limit from query params since your Django backend doesn't use them
     // Your backend handles pagination differently
 
-    console.log("API Call URL:", `${API_BASE_URL}/properties/?${queryParams.toString()}`)
+    //console.log("API Call URL:", `${API_BASE_URL}/properties/?${queryParams.toString()}`)
 
     // Get auth token
     const token = localStorage.getItem('access_token')

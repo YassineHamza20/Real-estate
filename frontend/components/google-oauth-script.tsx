@@ -19,7 +19,7 @@ export function GoogleOAuthScript() {
     script.async = true
     script.defer = true
     script.onload = () => {
-      console.log('Google Identity Services loaded successfully')
+     // console.log('Google Identity Services loaded successfully')
     }
     script.onerror = () => {
       console.error('Failed to load Google Identity Services')
